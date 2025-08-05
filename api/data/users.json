@@ -1,0 +1,321 @@
+{
+  "users": [
+    {
+      "id": "288b9585-a972-4f2c-9307-fcf95a3982ce",
+      "username": "testuser",
+      "email": "test@example.com",
+      "password_hash": "$2b$12$PvKQGsfOQTqF4xyxyz60o.6Q7vxrTLw0MdhwjQH4Lfp2KHZDswooe",
+      "name": "Test User",
+      "age": 18,
+      "phone": "+1-555-0123",
+      "income": 50000,
+      "personality_profile": {
+        "personality_type": "INTJ",
+        "learning_style": "Visual and Analytical",
+        "career_interests": ["Computer Science", "Engineering", "Research"],
+        "strengths": ["Problem-solving", "Analytical thinking", "Independence"],
+        "areas_for_development": ["Social skills", "Public speaking"],
+        "study_preferences": {
+          "environment": "Quiet, individual study spaces",
+          "group_size": "Small groups or individual",
+          "schedule": "Flexible, self-paced",
+          "resources": "Digital tools and libraries"
+        },
+        "work_environment_preferences": {
+          "team_size": "Small teams or individual work",
+          "communication": "Written communication preferred",
+          "structure": "Clear goals with autonomy",
+          "location": "Hybrid or remote options"
+        },
+        "communication_style": "Direct and logical",
+        "leadership_style": "Strategic and analytical",
+        "stress_management": "Problem-solving and planning",
+        "confidence_score": 0.85
+      },
+      "questionnaire_answers": {
+        "academic_performance": {
+          "gpa": 3.8,
+          "sat_score": 1450,
+          "act_score": 32,
+          "ap_courses_taken": 5,
+          "honors_classes": true,
+          "extracurricular_activities": ["Robotics Club", "Math Team", "Science Olympiad"]
+        },
+        "learning_preferences": {
+          "class_size": "Small (10-20 students)",
+          "teaching_style": "Hands-on and project-based",
+          "assessment_type": "Projects and research papers",
+          "technology_importance": "Very important",
+          "international_experience": "Interested"
+        },
+        "career_goals": {
+          "primary_interest": "Computer Science",
+          "secondary_interests": ["Artificial Intelligence", "Software Engineering"],
+          "career_aspirations": "Research scientist or tech entrepreneur",
+          "industry_preference": "Technology and Research",
+          "work_life_balance": "Important but flexible"
+        },
+        "personal_preferences": {
+          "location_type": "Urban or suburban",
+          "climate_preference": "Moderate",
+          "campus_size": "Medium to large",
+          "diversity_importance": "Very important",
+          "sports_importance": "Not important",
+          "arts_culture_importance": "Somewhat important"
+        },
+        "financial_considerations": {
+          "budget_range": "30000-50000",
+          "scholarship_need": "High",
+          "work_study_interest": true,
+          "loan_comfort": "Moderate",
+          "family_contribution": 15000
+        },
+        "values_and_priorities": {
+          "research_opportunities": "Very important",
+          "internship_connections": "Very important",
+          "alumni_network": "Important",
+          "innovation_focus": "Very important",
+          "social_impact": "Important",
+          "prestige": "Somewhat important"
+        }
+      },
+      "preferred_majors": ["Computer Science", "Artificial Intelligence", "Software Engineering", "Data Science"],
+      "preferred_locations": ["California", "Massachusetts", "New York", "Washington"],
+      "min_acceptance_rate": 0.15,
+      "max_tuition": 50000,
+      "preferred_university_type": "Research University",
+      "high_school_info": {
+        "name": "Lincoln High School",
+        "location": "San Francisco, CA",
+        "graduation_year": 2024,
+        "class_rank": "Top 10%",
+        "gpa_scale": "4.0",
+        "school_type": "Public",
+        "magnet_program": "STEM Academy"
+      },
+      "test_scores": {
+        "sat_total": 1450,
+        "sat_math": 780,
+        "sat_evidence_based_reading": 670,
+        "act_composite": 32,
+        "act_math": 34,
+        "act_english": 30,
+        "act_reading": 32,
+        "act_science": 32,
+        "ap_scores": {
+          "Calculus BC": 5,
+          "Computer Science A": 5,
+          "Physics C: Mechanics": 4,
+          "English Literature": 4,
+          "US History": 4
+        }
+      },
+      "extracurricular_activities": [
+        {
+          "name": "Robotics Team Captain",
+          "duration": "3 years",
+          "leadership_role": "Team Captain",
+          "achievements": ["State champions", "National qualifiers"],
+          "hours_per_week": 15
+        },
+        {
+          "name": "Math Team",
+          "duration": "4 years",
+          "leadership_role": "Vice President",
+          "achievements": ["Regional champions", "State finalists"],
+          "hours_per_week": 8
+        },
+        {
+          "name": "Science Olympiad",
+          "duration": "3 years",
+          "leadership_role": "Member",
+          "achievements": ["Regional medals in multiple events"],
+          "hours_per_week": 10
+        }
+      ],
+      "awards_and_honors": [
+        "National Merit Scholar",
+        "AP Scholar with Distinction",
+        "School Valedictorian",
+        "Science Fair 1st Place",
+        "Math Competition State Finalist"
+      ],
+      "work_experience": [
+        {
+          "position": "Software Development Intern",
+          "company": "TechStart Inc.",
+          "duration": "Summer 2023",
+          "responsibilities": ["Developed web applications", "Collaborated with senior developers"],
+          "skills_gained": ["JavaScript", "React", "Git", "Agile development"]
+        }
+      ],
+      "volunteer_experience": [
+        {
+          "organization": "Code for Good",
+          "role": "Volunteer Tutor",
+          "duration": "2 years",
+          "hours": 200,
+          "description": "Teaching programming to underprivileged youth"
+        }
+      ],
+      "languages": ["English (Native)", "Spanish (Conversational)"],
+      "technical_skills": ["Python", "Java", "JavaScript", "HTML/CSS", "Git", "SQL"],
+      "interests_and_hobbies": ["Coding", "Reading science fiction", "Hiking", "Photography"],
+      "created_at": "2025-08-05T11:56:00.739191",
+      "updated_at": "2025-08-05T11:56:00.739203"
+    },
+    {
+      "id": "sample-user-2",
+      "username": "johndoe",
+      "email": "john.doe@example.com",
+      "password_hash": "$2b$12$example_hash_here",
+      "name": "John Doe",
+      "age": 17,
+      "phone": "+1-555-0456",
+      "income": 75000,
+      "personality_profile": {
+        "personality_type": "ENFP",
+        "learning_style": "Kinesthetic and Social",
+        "career_interests": ["Psychology", "Education", "Social Work"],
+        "strengths": ["Empathy", "Communication", "Creativity"],
+        "areas_for_development": ["Time management", "Attention to detail"],
+        "study_preferences": {
+          "environment": "Collaborative spaces with discussion",
+          "group_size": "Medium to large groups",
+          "schedule": "Structured with flexibility",
+          "resources": "Interactive tools and real-world examples"
+        },
+        "work_environment_preferences": {
+          "team_size": "Medium to large teams",
+          "communication": "Verbal and collaborative",
+          "structure": "Flexible with creative freedom",
+          "location": "On-site with people interaction"
+        },
+        "communication_style": "Warm and engaging",
+        "leadership_style": "Inspirational and collaborative",
+        "stress_management": "Social support and creative outlets",
+        "confidence_score": 0.78
+      },
+      "questionnaire_answers": {
+        "academic_performance": {
+          "gpa": 3.6,
+          "sat_score": 1300,
+          "act_score": 28,
+          "ap_courses_taken": 3,
+          "honors_classes": true,
+          "extracurricular_activities": ["Student Council", "Debate Team", "Community Service Club"]
+        },
+        "learning_preferences": {
+          "class_size": "Medium (20-40 students)",
+          "teaching_style": "Discussion-based and collaborative",
+          "assessment_type": "Presentations and group projects",
+          "technology_importance": "Somewhat important",
+          "international_experience": "Very interested"
+        },
+        "career_goals": {
+          "primary_interest": "Psychology",
+          "secondary_interests": ["Education", "Social Work"],
+          "career_aspirations": "School counselor or clinical psychologist",
+          "industry_preference": "Education and Healthcare",
+          "work_life_balance": "Very important"
+        },
+        "personal_preferences": {
+          "location_type": "Any",
+          "climate_preference": "Any",
+          "campus_size": "Medium",
+          "diversity_importance": "Very important",
+          "sports_importance": "Somewhat important",
+          "arts_culture_importance": "Very important"
+        },
+        "financial_considerations": {
+          "budget_range": "20000-40000",
+          "scholarship_need": "Moderate",
+          "work_study_interest": true,
+          "loan_comfort": "Low",
+          "family_contribution": 25000
+        },
+        "values_and_priorities": {
+          "research_opportunities": "Important",
+          "internship_connections": "Very important",
+          "alumni_network": "Important",
+          "innovation_focus": "Somewhat important",
+          "social_impact": "Very important",
+          "prestige": "Not important"
+        }
+      },
+      "preferred_majors": ["Psychology", "Education", "Social Work", "Counseling"],
+      "preferred_locations": ["California", "Oregon", "Washington", "Colorado"],
+      "min_acceptance_rate": 0.30,
+      "max_tuition": 40000,
+      "preferred_university_type": "Liberal Arts College",
+      "high_school_info": {
+        "name": "Oakland High School",
+        "location": "Oakland, CA",
+        "graduation_year": 2024,
+        "class_rank": "Top 25%",
+        "gpa_scale": "4.0",
+        "school_type": "Public",
+        "magnet_program": null
+      },
+      "test_scores": {
+        "sat_total": 1300,
+        "sat_math": 620,
+        "sat_evidence_based_reading": 680,
+        "act_composite": 28,
+        "act_math": 26,
+        "act_english": 30,
+        "act_reading": 29,
+        "act_science": 27,
+        "ap_scores": {
+          "Psychology": 4,
+          "English Language": 4,
+          "US History": 3
+        }
+      },
+      "extracurricular_activities": [
+        {
+          "name": "Student Council",
+          "duration": "3 years",
+          "leadership_role": "Vice President",
+          "achievements": ["Organized school events", "Improved student life"],
+          "hours_per_week": 12
+        },
+        {
+          "name": "Debate Team",
+          "duration": "2 years",
+          "leadership_role": "Member",
+          "achievements": ["Regional finalist"],
+          "hours_per_week": 6
+        }
+      ],
+      "awards_and_honors": [
+        "Student of the Month",
+        "Community Service Award",
+        "Debate Team Recognition"
+      ],
+      "work_experience": [
+        {
+          "position": "Camp Counselor",
+          "company": "Summer Youth Camp",
+          "duration": "Summer 2023",
+          "responsibilities": ["Supervised children", "Organized activities"],
+          "skills_gained": ["Leadership", "Communication", "Problem-solving"]
+        }
+      ],
+      "volunteer_experience": [
+        {
+          "organization": "Local Food Bank",
+          "role": "Volunteer",
+          "duration": "2 years",
+          "hours": 150,
+          "description": "Helping distribute food to families in need"
+        }
+      ],
+      "languages": ["English (Native)"],
+      "technical_skills": ["Microsoft Office", "Social Media Management"],
+      "interests_and_hobbies": ["Reading", "Volunteering", "Music", "Travel"],
+      "created_at": "2025-08-05T12:00:00.000000",
+      "updated_at": "2025-08-05T12:00:00.000000"
+    }
+  ]
+}

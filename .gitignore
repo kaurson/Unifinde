@@ -1,0 +1,11 @@
+.env
+.venv
+frontend/node_modules
+lib
+.next
+.cursorrules
+api/universities.db
+app/__pycache__
+app/tool/__pycache__
+database/__pycache__
+.env.backup
