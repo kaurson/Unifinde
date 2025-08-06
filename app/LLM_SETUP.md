@@ -194,7 +194,7 @@ collector.update_llm_config(new_llm_config)
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `DATABASE_URL` | Database connection string | sqlite:///universities.db |
+| `DATABASE_URL` | Database connection string | sqlite:///./universities.db |
 | `DATABASE_ECHO` | Log SQL queries | false |
 | `DATABASE_POOL_SIZE` | Connection pool size | 10 |
 

@@ -1,6 +1,6 @@
 from logging.config import fileConfig
 import os
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -8,28 +8,27 @@ from sqlalchemy import pool
 from alembic import context
 
 # Load environment variables
-load_dotenv(find_dotenv())
+load_dotenv()
+
+# Import your models to ensure they are registered with SQLAlchemy
+from database.models import Base
+from database.database import DATABASE_URL
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Set the database URL from your existing configuration
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Import your models for autogenerate support
-from database.models import Base
+# add your model's MetaData object here
+# for 'autogenerate' support
 target_metadata = Base.metadata
-
-# Override the sqlalchemy.url from environment variable
-def get_url():
-    """Get database URL from environment variable"""
-    return os.getenv("DATABASE_URL") or os.getenv("SUPABASE_DB_URL")
-
-# Set the database URL in the config
-config.set_main_option("sqlalchemy.url", get_url())
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -68,15 +67,15 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-
-    with connectable.connect() as connection:
+    # Use the same engine configuration as your main application
+    from database.database import engine
+    
+    with engine.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection, 
+            target_metadata=target_metadata,
+            compare_type=True,
+            compare_server_default=True
         )
 
         with context.begin_transaction():

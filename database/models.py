@@ -357,7 +357,9 @@ class University(Base):
     # Relationships
     programs = relationship("Program", back_populates="university", cascade="all, delete-orphan")
     facilities = relationship("Facility", back_populates="university", cascade="all, delete-orphan")
-    matches = relationship("UniversityMatch", back_populates="university")
+    user_matches = relationship("UserMatch", back_populates="university")
+    university_matches = relationship("UniversityMatch", back_populates="university")
+    data_collections = relationship("UniversityDataCollection", back_populates="university")
     
     def __repr__(self) -> str:
         return f'<University {self.name}>'
@@ -392,7 +394,10 @@ class University(Base):
             'source_url': self.source_url,
             'confidence_score': self.confidence_score,
             'programs': [program.to_dict() for program in self.programs],
-            'facilities': [facility.to_dict() for facility in self.facilities]
+            'facilities': [facility.to_dict() for facility in self.facilities],
+            'user_matches': [match.to_dict() for match in self.user_matches],
+            'university_matches': [match.to_dict() for match in self.university_matches],
+            'data_collections': [collection.to_dict() for collection in self.data_collections]
         }
 
 class Program(Base):
@@ -470,7 +475,7 @@ class UserMatch(Base):
     
     # Relationships
     user = relationship("User", back_populates="matches")
-    university = relationship("University", back_populates="matches")
+    university = relationship("University", back_populates="user_matches")
     program = relationship("Program")
     
     def to_dict(self) -> Dict[str, Any]:
@@ -508,7 +513,7 @@ class UniversityMatch(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
-    university = relationship("University", back_populates="matches")
+    university = relationship("University", back_populates="university_matches")
     user = relationship("User")
     
     def to_dict(self) -> Dict[str, Any]:
@@ -522,4 +527,167 @@ class UniversityMatch(Base):
             'cultural_fit_score': self.cultural_fit_score,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'user': self.user.to_dict() if self.user else None
+        }
+
+class UniversityDataCollection(Base):
+    __tablename__ = 'university_data_collections'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    university_name = Column(String(200), nullable=False, index=True)
+    search_query = Column(String(500), nullable=True)
+    target_urls = Column(JSON, nullable=True)  # List of URLs to scrape
+    status = Column(String(50), default='pending')  # pending, in_progress, completed, failed
+    
+    # LLM Analysis Results
+    llm_analysis = Column(JSON, nullable=True)  # Raw LLM response
+    extracted_data = Column(JSON, nullable=True)  # Structured data extracted by LLM
+    confidence_score = Column(Float, default=0.0)
+    
+    # Browser-use specific data
+    browser_session_id = Column(String(100), nullable=True)
+    scraped_content = Column(JSON, nullable=True)  # Raw scraped content from browser
+    search_results = Column(JSON, nullable=True)  # Search engine results
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    error_message = Column(Text, nullable=True)
+    
+    # Relationships
+    university = relationship("University", back_populates="data_collections")
+    university_id = Column(Integer, ForeignKey('universities.id'), nullable=True)
+    search_tasks = relationship("UniversitySearchTask", back_populates="data_collection")
+    llm_analyses = relationship("LLMAnalysisResult", back_populates="data_collection")
+    
+    def __repr__(self) -> str:
+        return f'<UniversityDataCollection {self.university_name}>'
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert university data collection object to dictionary"""
+        return {
+            'id': self.id,
+            'university_name': self.university_name,
+            'search_query': self.search_query,
+            'target_urls': self.target_urls,
+            'status': self.status,
+            'llm_analysis': self.llm_analysis,
+            'extracted_data': self.extracted_data,
+            'confidence_score': self.confidence_score,
+            'browser_session_id': self.browser_session_id,
+            'scraped_content': self.scraped_content,
+            'search_results': self.search_results,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message,
+            'university_id': self.university_id,
+            'search_tasks': [task.to_dict() for task in self.search_tasks],
+            'llm_analyses': [analysis.to_dict() for analysis in self.llm_analyses]
+        }
+
+class UniversitySearchTask(Base):
+    __tablename__ = 'university_search_tasks'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_type = Column(String(100), nullable=False)  # 'university_info', 'programs', 'admissions', etc.
+    university_name = Column(String(200), nullable=False, index=True)
+    search_queries = Column(JSON, nullable=True)  # List of search queries to execute
+    
+    # Task configuration
+    max_results = Column(Integer, default=10)
+    search_engines = Column(JSON, nullable=True)  # ['google', 'bing', 'duckduckgo']
+    include_news = Column(Boolean, default=True)
+    include_social_media = Column(Boolean, default=False)
+    
+    # Task status
+    status = Column(String(50), default='pending')  # pending, running, completed, failed
+    progress = Column(Float, default=0.0)  # 0.0 to 1.0
+    
+    # Results
+    search_results = Column(JSON, nullable=True)  # Raw search results
+    processed_results = Column(JSON, nullable=True)  # Processed and filtered results
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    error_message = Column(Text, nullable=True)
+    
+    # Relationships
+    data_collection = relationship("UniversityDataCollection", back_populates="search_tasks")
+    data_collection_id = Column(Integer, ForeignKey('university_data_collections.id'), nullable=True)
+    
+    def __repr__(self) -> str:
+        return f'<UniversitySearchTask {self.task_type} for {self.university_name}>'
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert university search task object to dictionary"""
+        return {
+            'id': self.id,
+            'task_type': self.task_type,
+            'university_name': self.university_name,
+            'search_queries': self.search_queries,
+            'max_results': self.max_results,
+            'search_engines': self.search_engines,
+            'include_news': self.include_news,
+            'include_social_media': self.include_social_media,
+            'status': self.status,
+            'progress': self.progress,
+            'search_results': self.search_results,
+            'processed_results': self.processed_results,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message,
+            'data_collection_id': self.data_collection_id
+        }
+
+class LLMAnalysisResult(Base):
+    __tablename__ = 'llm_analysis_results'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    data_collection_id = Column(Integer, ForeignKey('university_data_collections.id'), nullable=False)
+    
+    # Analysis details
+    analysis_type = Column(String(100), nullable=False)  # 'university_info', 'programs', 'admissions', etc.
+    model_used = Column(String(100), nullable=True)  # 'gpt-4', 'claude-3', etc.
+    prompt_used = Column(Text, nullable=True)
+    
+    # Results
+    raw_response = Column(Text, nullable=True)
+    structured_data = Column(JSON, nullable=True)
+    confidence_score = Column(Float, default=0.0)
+    processing_time = Column(Float, nullable=True)  # seconds
+    
+    # Quality metrics
+    data_completeness = Column(Float, default=0.0)  # 0.0 to 1.0
+    data_accuracy = Column(Float, default=0.0)  # 0.0 to 1.0
+    source_citations = Column(JSON, nullable=True)  # URLs and sources used
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    data_collection = relationship("UniversityDataCollection", back_populates="llm_analyses")
+    
+    def __repr__(self) -> str:
+        return f'<LLMAnalysisResult {self.analysis_type}>'
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert LLM analysis result object to dictionary"""
+        return {
+            'id': self.id,
+            'data_collection_id': self.data_collection_id,
+            'analysis_type': self.analysis_type,
+            'model_used': self.model_used,
+            'prompt_used': self.prompt_used,
+            'raw_response': self.raw_response,
+            'structured_data': self.structured_data,
+            'confidence_score': self.confidence_score,
+            'processing_time': self.processing_time,
+            'data_completeness': self.data_completeness,
+            'data_accuracy': self.data_accuracy,
+            'source_citations': self.source_citations,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }

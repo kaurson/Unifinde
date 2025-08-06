@@ -163,7 +163,7 @@ The system uses SQLAlchemy with the following models:
 Create a `.env` file in the app directory:
 
 ```env
-DATABASE_URL=sqlite:///universities.db
+DATABASE_URL=sqlite:///./universities.db
 CHROME_HEADLESS=true
 SCRAPER_TIMEOUT=10
 ```
@@ -174,7 +174,7 @@ The system supports multiple database backends:
 
 ```python
 # SQLite (default)
-collector = UniversityDataCollector("sqlite:///universities.db")
+collector = UniversityDataCollector("sqlite:///./universities.db")
 
 # PostgreSQL
 collector = UniversityDataCollector("postgresql://user:pass@localhost/universities")

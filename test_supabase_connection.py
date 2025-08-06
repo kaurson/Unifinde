@@ -11,12 +11,12 @@ def test_supabase_connection():
     """Test Supabase database connection"""
     
     # Get DATABASE_URL
-    database_url = os.getenv("DATABASE_URL")
+    DATABASE_URL = os.getenv("DATABASE_URL")
     
     print("🔍 Testing Supabase Connection...")
-    print(f"📋 DATABASE_URL: {database_url}")
+    print(f"📋 DATABASE_URL: {DATABASE_URL}")
     
-    if not database_url:
+    if not DATABASE_URL:
         print("❌ DATABASE_URL not found in environment variables")
         print("💡 Make sure your .env file contains the correct DATABASE_URL")
         return False
@@ -24,7 +24,7 @@ def test_supabase_connection():
     try:
         # Create engine
         print("🔧 Creating database engine...")
-        engine = create_engine(database_url, pool_pre_ping=True)
+        engine = create_engine(DATABASE_URL, pool_pre_ping=True)
         
         # Test connection
         print("🔌 Testing connection...")

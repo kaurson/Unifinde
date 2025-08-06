@@ -19,7 +19,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.models import Base, User, University, School, Program, UserMatch, UniversityMatch
 from database.database import get_db, engine
 from api.schemas import (
-    UserCreate, UserLogin, UserProfile, UserUpdate,
+    UserCreate, UserLogin, UserProfile, UserUpdate, AuthResponse,
     UniversityResponse, SchoolResponse, ProgramResponse,
     MatchResponse, QuestionnaireResponse, PersonalityProfile
 )
@@ -27,6 +27,7 @@ from api.auth import get_current_user, create_access_token
 from api.matching import MatchingService
 from api.questionnaire import QuestionnaireService
 from api.school_scraper import SchoolScraperService
+from api.university_data_collection import router as university_data_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -40,59 +41,102 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Frontend URL
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000"
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Security
 security = HTTPBearer()
+
+# Include routers
+app.include_router(university_data_router)
 
 @app.get("/")
 async def root():
     return {"message": "University Matching API"}
 
 # Authentication endpoints
-@app.post("/auth/register", response_model=dict)
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str):
+    """Handle all CORS preflight requests"""
+    return {"message": "OK"}
+
+@app.post("/auth/register", response_model=AuthResponse)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
-    # Check if user already exists
-    existing_user = db.query(User).filter(
-        (User.email == user_data.email) | (User.username == user_data.username)
-    ).first()
-    
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email or username already exists"
+    print(f"🔍 Registration attempt received for: {user_data.email}")
+    try:
+        # Check if user already exists
+        existing_user = db.query(User).filter(
+            (User.email == user_data.email) | (User.username == user_data.username)
+        ).first()
+        
+        if existing_user:
+            if existing_user.email == user_data.email:
+                print(f"❌ Registration failed: Email already exists - {user_data.email}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User with this email already exists"
+                )
+            else:
+                print(f"❌ Registration failed: Username already taken - {user_data.username}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Username is already taken"
+                )
+        
+        # Hash password
+        password_hash = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
+        
+        # Create user
+        user = User(
+            username=user_data.username,
+            email=user_data.email,
+            password_hash=password_hash.decode('utf-8'),
+            name=user_data.name
         )
-    
-    # Hash password
-    password_hash = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
-    
-    # Create user
-    user = User(
-        username=user_data.username,
-        email=user_data.email,
-        password_hash=password_hash.decode('utf-8'),
-        name=user_data.name
-    )
-    
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    
-    # Create access token
-    access_token = create_access_token(data={"sub": user.email})
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user.to_dict()
-    }
+        
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        
+        # Create access token
+        access_token = create_access_token(data={"sub": user.email})
+        
+        print(f"✅ New user registered: {user.username} ({user.email})")
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": user.to_dict(),
+            "message": "User registered successfully"
+        }
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        # Rollback transaction on error
+        db.rollback()
+        print(f"❌ Registration error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during registration. Please try again."
+        )
 
-@app.post("/auth/login", response_model=dict)
+@app.post("/auth/login", response_model=AuthResponse)
 async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     """Login user"""
     user = db.query(User).filter(User.email == user_data.email).first()
@@ -108,7 +152,8 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": user.to_dict()
+        "user": user.to_dict(),
+        "message": "Login successful"
     }
 
 # User profile endpoints

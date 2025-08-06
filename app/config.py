@@ -57,7 +57,7 @@ class ScraperConfig:
 @dataclass
 class DatabaseConfig:
     """Database Configuration"""
-    url: str = "sqlite:///universities.db"
+    url: str = "sqlite:///./universities.db"
     echo: bool = False
     pool_size: int = 10
     max_overflow: int = 20
@@ -122,7 +122,7 @@ def load_config() -> AppConfig:
     
     # Database Configuration
     database_config = DatabaseConfig(
-        url=os.getenv("DATABASE_URL", "sqlite:///universities.db"),
+        url=os.getenv("DATABASE_URL", "sqlite:///./universities.db"),
         echo=os.getenv("DATABASE_ECHO", "false").lower() == "true",
         pool_size=int(os.getenv("DATABASE_POOL_SIZE", "10")),
         max_overflow=int(os.getenv("DATABASE_MAX_OVERFLOW", "20"))
@@ -179,7 +179,7 @@ BROWSER_PROXY_USERNAME=
 BROWSER_PROXY_PASSWORD=
 
 # Database Configuration
-DATABASE_URL=sqlite:///universities.db
+DATABASE_URL=sqlite:///./universities.db
 DATABASE_ECHO=false
 DATABASE_POOL_SIZE=10
 DATABASE_MAX_OVERFLOW=20

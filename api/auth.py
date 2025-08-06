@@ -1,7 +1,7 @@
 from fastapi import HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-import jwt
+from jose import jwt
 from datetime import datetime, timedelta
 import sys
 import os
@@ -44,7 +44,7 @@ def verify_token(token: str) -> Optional[str]:
         if email is None:
             return None
         return email
-    except jwt.PyJWTError:
+    except jwt.JWTError:
         return None
 
 async def get_current_user(

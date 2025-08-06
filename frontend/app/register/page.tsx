@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -22,8 +22,25 @@ export default function RegisterPage() {
     password: '',
     confirmPassword: '',
     name: '',
-    agreeToTerms: false
+    agreeToTerms: true
   })
+
+  console.log('RegisterPage component rendered')
+
+  // Test API connection on component mount
+  useEffect(() => {
+    console.log('RegisterPage useEffect running')
+    const testAPI = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/')
+        const data = await response.json()
+        console.log('API test successful:', data)
+      } catch (error) {
+        console.error('API test failed:', error)
+      }
+    }
+    testAPI()
+  }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
@@ -33,8 +50,21 @@ export default function RegisterPage() {
     }))
   }
 
+  const testAPIConnection = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/')
+      const data = await response.json()
+      toast.success('API connection successful!')
+      console.log('API test result:', data)
+    } catch (error) {
+      toast.error('API connection failed!')
+      console.error('API test error:', error)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('Form submitted with data:', formData)
     
     if (formData.password !== formData.confirmPassword) {
       toast.error('Passwords do not match')
@@ -47,14 +77,17 @@ export default function RegisterPage() {
     }
 
     setIsLoading(true)
+    console.log('Starting registration process...')
 
     try {
+      console.log('Calling register API...')
       const response = await register({
         username: formData.username,
         email: formData.email,
         password: formData.password,
         name: formData.name
       })
+      console.log('Register API response:', response)
 
       if (response.success && response.data) {
         toast.success('Registration successful!')
@@ -65,6 +98,7 @@ export default function RegisterPage() {
         toast.error(response.error || 'Registration failed')
       }
     } catch (error) {
+      console.error('Registration error:', error)
       toast.error('Network error. Please try again.')
     } finally {
       setIsLoading(false)
@@ -95,6 +129,23 @@ export default function RegisterPage() {
           <p className="text-muted-foreground">
             Join thousands of students finding their perfect university match
           </p>
+          {/* Test API Button */}
+          <Button 
+            onClick={testAPIConnection} 
+            variant="outline" 
+            size="sm" 
+            className="mt-4"
+          >
+            Test API Connection
+          </Button>
+          
+          {/* Simple Test Button */}
+          <button 
+            onClick={() => console.log('Simple test button clicked!')}
+            className="mt-2 px-4 py-2 bg-red-500 text-white rounded"
+          >
+            Simple Test Button
+          </button>
         </div>
 
         {/* Registration Form */}
@@ -217,13 +268,17 @@ export default function RegisterPage() {
               </div>
 
               {/* Submit Button */}
-              <Button 
-                type="submit" 
-                className="w-full" 
+              <button 
+                type="button" 
+                className="w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
                 disabled={isLoading}
+                onClick={() => {
+                  console.log('Submit button clicked!')
+                  handleSubmit(new Event('submit') as any)
+                }}
               >
                 {isLoading ? 'Creating Account...' : 'Create Account'}
-              </Button>
+              </button>
             </form>
 
             <Separator className="my-6" />

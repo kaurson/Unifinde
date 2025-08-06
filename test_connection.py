@@ -13,17 +13,17 @@ load_dotenv()
 
 def test_connection():
     """Test the database connection"""
-    database_url = os.getenv("DATABASE_URL")
+    DATABASE_URL = os.getenv("DATABASE_URL")
     
-    if not database_url:
+    if not DATABASE_URL:
         print("❌ DATABASE_URL not found in environment variables")
         return False
     
-    print(f"🔗 Testing connection to: {database_url[:50]}...")
+    print(f"🔗 Testing connection to: {DATABASE_URL[:50]}...")
     
     # Parse the URL to extract components
     try:
-        parsed = urlparse(database_url)
+        parsed = urlparse(DATABASE_URL)
         print(f"📋 Connection details:")
         print(f"   Host: {parsed.hostname}")
         print(f"   Port: {parsed.port}")
@@ -46,7 +46,7 @@ def test_connection():
     
     # Test database connection
     try:
-        conn = psycopg2.connect(database_url)
+        conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
         cursor.execute("SELECT version();")
         version = cursor.fetchone()

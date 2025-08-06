@@ -15,18 +15,18 @@ def check_supabase_project():
     print("=" * 60)
     
     # Get DATABASE_URL
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
         print("❌ DATABASE_URL not found in .env file")
         return False
     
-    print(f"📋 DATABASE_URL: {database_url[:60]}...")
+    print(f"📋 DATABASE_URL: {DATABASE_URL[:60]}...")
     
     # Extract project reference
-    if "supabase.co" in database_url:
+    if "supabase.co" in DATABASE_URL:
         try:
             # Extract project ref from URL
-            parts = database_url.split("@")
+            parts = DATABASE_URL.split("@")
             if len(parts) > 1:
                 host_part = parts[1].split("/")[0]
                 project_ref = host_part.split(".")[0]

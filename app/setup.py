@@ -104,7 +104,7 @@ def create_database():
         from models import Base
         from sqlalchemy import create_engine
         
-        engine = create_engine("sqlite:///universities.db")
+        engine = create_engine("sqlite:///./universities.db")
         Base.metadata.create_all(engine)
         
         print("✅ Database created successfully")

@@ -9,3 +9,4 @@ app/__pycache__
 app/tool/__pycache__
 database/__pycache__
 .env.backup
+universities.db
