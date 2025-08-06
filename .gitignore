@@ -10,3 +10,5 @@ app/tool/__pycache__
 database/__pycache__
 .env.backup
 universities.db
+alembic/__pycache__
+app/output

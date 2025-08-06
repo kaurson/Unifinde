@@ -1,7 +1,7 @@
 """Add university data collection models
 
 Revision ID: 003
-Revises: 002
+Revises: fd1877ccfd89
 Create Date: 2024-01-15 10:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '003'
-down_revision = '002'
+down_revision = 'fd1877ccfd89'
 branch_labels = None
 depends_on = None
 

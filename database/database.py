@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database configuration - SQLite only
-DATABASE_URL = "sqlite:///./universities.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./universities.db")
 
 print("🔧 Using SQLite database")
 

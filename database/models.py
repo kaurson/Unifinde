@@ -34,7 +34,6 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    matches = relationship("UserMatch", back_populates="user")
     student_profile = relationship("StudentProfile", back_populates="user", uselist=False)
     
     def __repr__(self) -> str:
@@ -233,461 +232,127 @@ class StudentProfile(Base):
                 completed_fields += 1
         
         return (completed_fields / total_fields * 100) if total_fields > 0 else 0.0
-    
-class School(Base):
-    __tablename__ = 'schools'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(200), nullable=False, index=True)
-    website = Column(String(500), nullable=True)
-    country = Column(String(100), nullable=True)
-    city = Column(String(100), nullable=True)
-    state = Column(String(100), nullable=True)
-    postal_code = Column(String(20), nullable=True)
-    phone = Column(String(50), nullable=True)
-    email = Column(String(200), nullable=True)
-    
-    # School statistics
-    student_population = Column(Integer, nullable=True)
-    teacher_count = Column(Integer, nullable=True)
-    graduation_rate = Column(Float, nullable=True)
-    college_acceptance_rate = Column(Float, nullable=True)
-    average_sat_score = Column(Integer, nullable=True)
-    average_act_score = Column(Integer, nullable=True)
-    ap_courses_offered = Column(Integer, nullable=True)
-    
-    # Academic performance
-    test_scores = Column(JSON, nullable=True)  # Various test scores
-    rankings = Column(JSON, nullable=True)  # School rankings
-    awards = Column(JSON, nullable=True)  # Awards and recognition
-    
-    # Programs and activities
-    programs_offered = Column(JSON, nullable=True)
-    extracurricular_activities = Column(JSON, nullable=True)
-    sports_teams = Column(JSON, nullable=True)
-    
-    # Additional information
-    description = Column(Text, nullable=True)
-    mission_statement = Column(Text, nullable=True)
-    facilities = Column(JSON, nullable=True)
-    
-    # Metadata
-    scraped_at = Column(DateTime(timezone=True), server_default=func.now())
-    last_updated = Column(DateTime(timezone=True), onupdate=func.now())
-    source_url = Column(String(500), nullable=True)
-    confidence_score = Column(Float, default=0.0)
-    
-    def __repr__(self) -> str:
-        return f'<School {self.name}>'
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert school object to dictionary"""
-        return {
-            'id': self.id,
-            'name': self.name,
-            'website': self.website,
-            'country': self.country,
-            'city': self.city,
-            'state': self.state,
-            'postal_code': self.postal_code,
-            'phone': self.phone,
-            'email': self.email,
-            'student_population': self.student_population,
-            'teacher_count': self.teacher_count,
-            'graduation_rate': self.graduation_rate,
-            'college_acceptance_rate': self.college_acceptance_rate,
-            'average_sat_score': self.average_sat_score,
-            'average_act_score': self.average_act_score,
-            'ap_courses_offered': self.ap_courses_offered,
-            'test_scores': self.test_scores,
-            'rankings': self.rankings,
-            'awards': self.awards,
-            'programs_offered': self.programs_offered,
-            'extracurricular_activities': self.extracurricular_activities,
-            'sports_teams': self.sports_teams,
-            'description': self.description,
-            'mission_statement': self.mission_statement,
-            'facilities': self.facilities,
-            'scraped_at': self.scraped_at.isoformat() if self.scraped_at else None,
-            'last_updated': self.last_updated.isoformat() if self.last_updated else None,
-            'source_url': self.source_url,
-            'confidence_score': self.confidence_score
-        }
 
-class University(Base):
-    __tablename__ = 'universities'
+class UniversityDataCollectionResult(Base):
+    __tablename__ = 'university_data_collection_results'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(200), nullable=False, index=True)
+    
+    # Metadata fields
+    total_universities = Column(Integer, nullable=True)
+    successful_collections = Column(Integer, nullable=True)
+    failed_collections = Column(Integer, nullable=True)
+    generated_at = Column(DateTime(timezone=True), nullable=True)
+    script_version = Column(String(50), nullable=True)
+    
+    # Results fields
+    success = Column(Boolean, nullable=True)
+    data_collection_id = Column(Integer, nullable=True)
+    
+    # Extracted data fields
+    name = Column(String(200), nullable=True)
     website = Column(String(500), nullable=True)
     country = Column(String(100), nullable=True)
     city = Column(String(100), nullable=True)
     state = Column(String(100), nullable=True)
-    postal_code = Column(String(20), nullable=True)
     phone = Column(String(50), nullable=True)
     email = Column(String(200), nullable=True)
-    
-    # Academic information
     founded_year = Column(Integer, nullable=True)
-    type = Column(String(100), nullable=True)  # Public, Private, etc.
-    accreditation = Column(Text, nullable=True)
-    
-    # Statistics
+    type = Column(String(100), nullable=True)
     student_population = Column(Integer, nullable=True)
+    undergraduate_population = Column(Integer, nullable=True)
+    graduate_population = Column(Integer, nullable=True)
+    international_students_percentage = Column(Float, nullable=True)
     faculty_count = Column(Integer, nullable=True)
+    student_faculty_ratio = Column(Float, nullable=True)
     acceptance_rate = Column(Float, nullable=True)
     tuition_domestic = Column(Float, nullable=True)
     tuition_international = Column(Float, nullable=True)
-    
-    # Rankings and reputation
+    room_and_board = Column(Float, nullable=True)
+    total_cost_of_attendance = Column(Float, nullable=True)
+    financial_aid_available = Column(Boolean, nullable=True)
+    average_financial_aid_package = Column(Float, nullable=True)
+    scholarships_available = Column(Boolean, nullable=True)
     world_ranking = Column(Integer, nullable=True)
     national_ranking = Column(Integer, nullable=True)
-    
-    # Additional data
+    regional_ranking = Column(Integer, nullable=True)
+    subject_rankings = Column(JSON, nullable=True)
     description = Column(Text, nullable=True)
     mission_statement = Column(Text, nullable=True)
     vision_statement = Column(Text, nullable=True)
+    campus_size = Column(String(100), nullable=True)
+    campus_type = Column(String(100), nullable=True)
+    climate = Column(String(100), nullable=True)
+    timezone = Column(String(100), nullable=True)
+    programs = Column(JSON, nullable=True)
+    student_life = Column(JSON, nullable=True)
+    financial_aid = Column(JSON, nullable=True)
+    international_students = Column(JSON, nullable=True)
+    alumni = Column(JSON, nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    source_urls = Column(JSON, nullable=True)
+    last_updated = Column(String(50), nullable=True)
     
-    # Metadata
-    scraped_at = Column(DateTime(timezone=True), server_default=func.now())
-    last_updated = Column(DateTime(timezone=True), onupdate=func.now())
-    source_url = Column(String(500), nullable=True)
-    confidence_score = Column(Float, default=0.0)
-    
-    # Relationships
-    programs = relationship("Program", back_populates="university", cascade="all, delete-orphan")
-    facilities = relationship("Facility", back_populates="university", cascade="all, delete-orphan")
-    user_matches = relationship("UserMatch", back_populates="university")
-    university_matches = relationship("UniversityMatch", back_populates="university")
-    data_collections = relationship("UniversityDataCollection", back_populates="university")
+    # Additional metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     def __repr__(self) -> str:
-        return f'<University {self.name}>'
+        return f'<UniversityDataCollectionResult {self.name}>'
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert university object to dictionary"""
+        """Convert university data collection result object to dictionary"""
         return {
             'id': self.id,
+            'total_universities': self.total_universities,
+            'successful_collections': self.successful_collections,
+            'failed_collections': self.failed_collections,
+            'generated_at': self.generated_at.isoformat() if self.generated_at else None,
+            'script_version': self.script_version,
+            'success': self.success,
+            'data_collection_id': self.data_collection_id,
             'name': self.name,
             'website': self.website,
             'country': self.country,
             'city': self.city,
             'state': self.state,
-            'postal_code': self.postal_code,
             'phone': self.phone,
             'email': self.email,
             'founded_year': self.founded_year,
             'type': self.type,
-            'accreditation': self.accreditation,
             'student_population': self.student_population,
+            'undergraduate_population': self.undergraduate_population,
+            'graduate_population': self.graduate_population,
+            'international_students_percentage': self.international_students_percentage,
             'faculty_count': self.faculty_count,
+            'student_faculty_ratio': self.student_faculty_ratio,
             'acceptance_rate': self.acceptance_rate,
             'tuition_domestic': self.tuition_domestic,
             'tuition_international': self.tuition_international,
+            'room_and_board': self.room_and_board,
+            'total_cost_of_attendance': self.total_cost_of_attendance,
+            'financial_aid_available': self.financial_aid_available,
+            'average_financial_aid_package': self.average_financial_aid_package,
+            'scholarships_available': self.scholarships_available,
             'world_ranking': self.world_ranking,
             'national_ranking': self.national_ranking,
+            'regional_ranking': self.regional_ranking,
+            'subject_rankings': self.subject_rankings,
             'description': self.description,
             'mission_statement': self.mission_statement,
             'vision_statement': self.vision_statement,
-            'scraped_at': self.scraped_at.isoformat() if self.scraped_at else None,
-            'last_updated': self.last_updated.isoformat() if self.last_updated else None,
-            'source_url': self.source_url,
+            'campus_size': self.campus_size,
+            'campus_type': self.campus_type,
+            'climate': self.climate,
+            'timezone': self.timezone,
+            'programs': self.programs,
+            'student_life': self.student_life,
+            'financial_aid': self.financial_aid,
+            'international_students': self.international_students,
+            'alumni': self.alumni,
             'confidence_score': self.confidence_score,
-            'programs': [program.to_dict() for program in self.programs],
-            'facilities': [facility.to_dict() for facility in self.facilities],
-            'user_matches': [match.to_dict() for match in self.user_matches],
-            'university_matches': [match.to_dict() for match in self.university_matches],
-            'data_collections': [collection.to_dict() for collection in self.data_collections]
-        }
-
-class Program(Base):
-    __tablename__ = 'programs'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    university_id = Column(Integer, ForeignKey('universities.id'), nullable=False)
-    name = Column(String(200), nullable=False)
-    level = Column(String(50), nullable=True)  # Bachelor, Master, PhD, etc.
-    field = Column(String(100), nullable=True)  # Computer Science, Engineering, etc.
-    duration = Column(String(50), nullable=True)  # 4 years, 2 years, etc.
-    tuition = Column(Float, nullable=True)
-    description = Column(Text, nullable=True)
-    requirements = Column(Text, nullable=True)
-    
-    university = relationship("University", back_populates="programs")
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'id': self.id,
-            'university_id': self.university_id,
-            'name': self.name,
-            'level': self.level,
-            'field': self.field,
-            'duration': self.duration,
-            'tuition': self.tuition,
-            'description': self.description,
-            'requirements': self.requirements
-        }
-
-class Facility(Base):
-    __tablename__ = 'facilities'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    university_id = Column(Integer, ForeignKey('universities.id'), nullable=False)
-    name = Column(String(200), nullable=False)
-    type = Column(String(100), nullable=True)  # Library, Lab, Sports, etc.
-    description = Column(Text, nullable=True)
-    capacity = Column(Integer, nullable=True)
-    
-    university = relationship("University", back_populates="facilities")
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'id': self.id,
-            'university_id': self.university_id,
-            'name': self.name,
-            'type': self.type,
-            'description': self.description,
-            'capacity': self.capacity
-        }
-
-class UserMatch(Base):
-    __tablename__ = 'user_matches'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    university_id = Column(Integer, ForeignKey('universities.id'), nullable=False)
-    program_id = Column(Integer, ForeignKey('programs.id'), nullable=True)
-    
-    # Matching scores
-    overall_score = Column(Float, nullable=False)
-    academic_fit_score = Column(Float, nullable=True)
-    financial_fit_score = Column(Float, nullable=True)
-    location_fit_score = Column(Float, nullable=True)
-    personality_fit_score = Column(Float, nullable=True)
-    
-    # User preferences
-    user_preferences = Column(JSON, nullable=True)
-    
-    # Match metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    is_favorite = Column(Boolean, default=False)
-    notes = Column(Text, nullable=True)
-    
-    # Relationships
-    user = relationship("User", back_populates="matches")
-    university = relationship("University", back_populates="user_matches")
-    program = relationship("Program")
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'university_id': self.university_id,
-            'program_id': self.program_id,
-            'overall_score': self.overall_score,
-            'academic_fit_score': self.academic_fit_score,
-            'financial_fit_score': self.financial_fit_score,
-            'location_fit_score': self.location_fit_score,
-            'personality_fit_score': self.personality_fit_score,
-            'user_preferences': self.user_preferences,
+            'source_urls': self.source_urls,
+            'last_updated': self.last_updated,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'is_favorite': self.is_favorite,
-            'notes': self.notes,
-            'university': self.university.to_dict() if self.university else None,
-            'program': self.program.to_dict() if self.program else None
-        }
-
-class UniversityMatch(Base):
-    __tablename__ = 'university_matches'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    university_id = Column(Integer, ForeignKey('universities.id'), nullable=False)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    
-    # Matching scores (from university perspective)
-    overall_score = Column(Float, nullable=False)
-    academic_potential_score = Column(Float, nullable=True)
-    financial_stability_score = Column(Float, nullable=True)
-    cultural_fit_score = Column(Float, nullable=True)
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relationships
-    university = relationship("University", back_populates="university_matches")
-    user = relationship("User")
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            'id': self.id,
-            'university_id': self.university_id,
-            'user_id': self.user_id,
-            'overall_score': self.overall_score,
-            'academic_potential_score': self.academic_potential_score,
-            'financial_stability_score': self.financial_stability_score,
-            'cultural_fit_score': self.cultural_fit_score,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'user': self.user.to_dict() if self.user else None
-        }
-
-class UniversityDataCollection(Base):
-    __tablename__ = 'university_data_collections'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    university_name = Column(String(200), nullable=False, index=True)
-    search_query = Column(String(500), nullable=True)
-    target_urls = Column(JSON, nullable=True)  # List of URLs to scrape
-    status = Column(String(50), default='pending')  # pending, in_progress, completed, failed
-    
-    # LLM Analysis Results
-    llm_analysis = Column(JSON, nullable=True)  # Raw LLM response
-    extracted_data = Column(JSON, nullable=True)  # Structured data extracted by LLM
-    confidence_score = Column(Float, default=0.0)
-    
-    # Browser-use specific data
-    browser_session_id = Column(String(100), nullable=True)
-    scraped_content = Column(JSON, nullable=True)  # Raw scraped content from browser
-    search_results = Column(JSON, nullable=True)  # Search engine results
-    
-    # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-    error_message = Column(Text, nullable=True)
-    
-    # Relationships
-    university = relationship("University", back_populates="data_collections")
-    university_id = Column(Integer, ForeignKey('universities.id'), nullable=True)
-    search_tasks = relationship("UniversitySearchTask", back_populates="data_collection")
-    llm_analyses = relationship("LLMAnalysisResult", back_populates="data_collection")
-    
-    def __repr__(self) -> str:
-        return f'<UniversityDataCollection {self.university_name}>'
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert university data collection object to dictionary"""
-        return {
-            'id': self.id,
-            'university_name': self.university_name,
-            'search_query': self.search_query,
-            'target_urls': self.target_urls,
-            'status': self.status,
-            'llm_analysis': self.llm_analysis,
-            'extracted_data': self.extracted_data,
-            'confidence_score': self.confidence_score,
-            'browser_session_id': self.browser_session_id,
-            'scraped_content': self.scraped_content,
-            'search_results': self.search_results,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'started_at': self.started_at.isoformat() if self.started_at else None,
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
-            'error_message': self.error_message,
-            'university_id': self.university_id,
-            'search_tasks': [task.to_dict() for task in self.search_tasks],
-            'llm_analyses': [analysis.to_dict() for analysis in self.llm_analyses]
-        }
-
-class UniversitySearchTask(Base):
-    __tablename__ = 'university_search_tasks'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    task_type = Column(String(100), nullable=False)  # 'university_info', 'programs', 'admissions', etc.
-    university_name = Column(String(200), nullable=False, index=True)
-    search_queries = Column(JSON, nullable=True)  # List of search queries to execute
-    
-    # Task configuration
-    max_results = Column(Integer, default=10)
-    search_engines = Column(JSON, nullable=True)  # ['google', 'bing', 'duckduckgo']
-    include_news = Column(Boolean, default=True)
-    include_social_media = Column(Boolean, default=False)
-    
-    # Task status
-    status = Column(String(50), default='pending')  # pending, running, completed, failed
-    progress = Column(Float, default=0.0)  # 0.0 to 1.0
-    
-    # Results
-    search_results = Column(JSON, nullable=True)  # Raw search results
-    processed_results = Column(JSON, nullable=True)  # Processed and filtered results
-    
-    # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-    error_message = Column(Text, nullable=True)
-    
-    # Relationships
-    data_collection = relationship("UniversityDataCollection", back_populates="search_tasks")
-    data_collection_id = Column(Integer, ForeignKey('university_data_collections.id'), nullable=True)
-    
-    def __repr__(self) -> str:
-        return f'<UniversitySearchTask {self.task_type} for {self.university_name}>'
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert university search task object to dictionary"""
-        return {
-            'id': self.id,
-            'task_type': self.task_type,
-            'university_name': self.university_name,
-            'search_queries': self.search_queries,
-            'max_results': self.max_results,
-            'search_engines': self.search_engines,
-            'include_news': self.include_news,
-            'include_social_media': self.include_social_media,
-            'status': self.status,
-            'progress': self.progress,
-            'search_results': self.search_results,
-            'processed_results': self.processed_results,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'started_at': self.started_at.isoformat() if self.started_at else None,
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
-            'error_message': self.error_message,
-            'data_collection_id': self.data_collection_id
-        }
-
-class LLMAnalysisResult(Base):
-    __tablename__ = 'llm_analysis_results'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    data_collection_id = Column(Integer, ForeignKey('university_data_collections.id'), nullable=False)
-    
-    # Analysis details
-    analysis_type = Column(String(100), nullable=False)  # 'university_info', 'programs', 'admissions', etc.
-    model_used = Column(String(100), nullable=True)  # 'gpt-4', 'claude-3', etc.
-    prompt_used = Column(Text, nullable=True)
-    
-    # Results
-    raw_response = Column(Text, nullable=True)
-    structured_data = Column(JSON, nullable=True)
-    confidence_score = Column(Float, default=0.0)
-    processing_time = Column(Float, nullable=True)  # seconds
-    
-    # Quality metrics
-    data_completeness = Column(Float, default=0.0)  # 0.0 to 1.0
-    data_accuracy = Column(Float, default=0.0)  # 0.0 to 1.0
-    source_citations = Column(JSON, nullable=True)  # URLs and sources used
-    
-    # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relationships
-    data_collection = relationship("UniversityDataCollection", back_populates="llm_analyses")
-    
-    def __repr__(self) -> str:
-        return f'<LLMAnalysisResult {self.analysis_type}>'
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert LLM analysis result object to dictionary"""
-        return {
-            'id': self.id,
-            'data_collection_id': self.data_collection_id,
-            'analysis_type': self.analysis_type,
-            'model_used': self.model_used,
-            'prompt_used': self.prompt_used,
-            'raw_response': self.raw_response,
-            'structured_data': self.structured_data,
-            'confidence_score': self.confidence_score,
-            'processing_time': self.processing_time,
-            'data_completeness': self.data_completeness,
-            'data_accuracy': self.data_accuracy,
-            'source_citations': self.source_citations,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

@@ -7,7 +7,7 @@ from datetime import datetime
 
 from database.database import get_db
 from database.models import UniversityDataCollection, University, LLMAnalysisResult
-from browser_use.university_scraper import UniversityDataScraper
+from browser_tools.university_scraper import UniversityDataScraper
 
 router = APIRouter(prefix="/university-data", tags=["university-data-collection"])
 
