@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import re
+import uuid
 
 # Authentication schemas
 class UserCreate(BaseModel):
@@ -45,7 +46,7 @@ class UserLogin(BaseModel):
     password: str
 
 class UserProfile(BaseModel):
-    id: int
+    id: str  # UUID as string
     username: str
     email: str
     name: str
@@ -53,6 +54,7 @@ class UserProfile(BaseModel):
     phone: Optional[str] = None
     income: Optional[float] = None
     personality_profile: Optional[Dict[str, Any]] = None
+    personality_summary: Optional[str] = None
     questionnaire_answers: Optional[Dict[str, Any]] = None
     preferred_majors: Optional[List[str]] = None
     preferred_locations: Optional[List[str]] = None
@@ -66,7 +68,6 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str
     user: UserProfile
-    message: str
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -77,28 +78,75 @@ class UserUpdate(BaseModel):
     max_tuition: Optional[float] = None
     preferred_university_type: Optional[str] = None
 
+# Questionnaire schemas
+class QuestionResponse(BaseModel):
+    id: str  # UUID as string
+    question_text: str
+    question_type: str
+    category: Optional[str] = None
+    order_index: int
+    is_active: bool
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+class UserAnswerCreate(BaseModel):
+    question_id: str  # UUID as string
+    answer_text: str
+    answer_data: Optional[Dict[str, Any]] = None
+
+class UserAnswerResponse(BaseModel):
+    id: str  # UUID as string
+    user_id: str  # UUID as string
+    question_id: str  # UUID as string
+    answer_text: str
+    answer_data: Optional[Dict[str, Any]] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+class QuestionnaireSubmission(BaseModel):
+    answers: List[UserAnswerCreate]
+    preferred_majors: Optional[List[str]] = None
+    preferred_locations: Optional[List[str]] = None
+
+class QuestionnaireResponse(BaseModel):
+    answers: Dict[str, Any]
+    preferred_majors: List[str]
+    preferred_locations: List[str]
+
+class PersonalityProfile(BaseModel):
+    personality_type: str
+    learning_style: str
+    career_interests: List[str]
+    strengths: List[str]
+    areas_for_development: List[str]
+    study_preferences: Dict[str, Any]
+    work_environment_preferences: Dict[str, Any]
+    communication_style: str
+    leadership_style: str
+    stress_management: str
+    confidence_score: float
+
 # University schemas
 class ProgramResponse(BaseModel):
-    id: int
-    university_id: int
+    id: str  # UUID as string
+    university_id: str  # UUID as string
     name: str
     level: Optional[str] = None
     field: Optional[str] = None
     duration: Optional[str] = None
     tuition: Optional[float] = None
     description: Optional[str] = None
-    requirements: Optional[str] = None
 
 class FacilityResponse(BaseModel):
-    id: int
-    university_id: int
+    id: str  # UUID as string
+    university_id: str  # UUID as string
     name: str
     type: Optional[str] = None
     description: Optional[str] = None
     capacity: Optional[int] = None
 
 class UniversityResponse(BaseModel):
-    id: int
+    id: str  # UUID as string
     name: str
     website: Optional[str] = None
     country: Optional[str] = None
@@ -127,9 +175,8 @@ class UniversityResponse(BaseModel):
     programs: List[ProgramResponse] = []
     facilities: List[FacilityResponse] = []
 
-# School schemas
 class SchoolResponse(BaseModel):
-    id: int
+    id: str  # UUID as string
     name: str
     website: Optional[str] = None
     country: Optional[str] = None
@@ -159,31 +206,11 @@ class SchoolResponse(BaseModel):
     source_url: Optional[str] = None
     confidence_score: Optional[float] = None
 
-# Questionnaire schemas
-class QuestionnaireResponse(BaseModel):
-    answers: Dict[str, Any]
-    preferred_majors: List[str]
-    preferred_locations: List[str]
-
-class PersonalityProfile(BaseModel):
-    personality_type: str
-    learning_style: str
-    career_interests: List[str]
-    strengths: List[str]
-    areas_for_development: List[str]
-    study_preferences: Dict[str, Any]
-    work_environment_preferences: Dict[str, Any]
-    communication_style: str
-    leadership_style: str
-    stress_management: str
-    confidence_score: float
-
-# Matching schemas
 class MatchResponse(BaseModel):
-    id: int
-    user_id: int
-    university_id: int
-    program_id: Optional[int] = None
+    id: str  # UUID as string
+    user_id: str  # UUID as string
+    university_id: str  # UUID as string
+    program_id: Optional[str] = None  # UUID as string
     overall_score: float
     academic_fit_score: Optional[float] = None
     financial_fit_score: Optional[float] = None
@@ -196,7 +223,6 @@ class MatchResponse(BaseModel):
     university: Optional[UniversityResponse] = None
     program: Optional[ProgramResponse] = None
 
-# School scraping schemas
 class SchoolScrapingRequest(BaseModel):
     school_name: str
     location: Optional[str] = None

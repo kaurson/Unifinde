@@ -14,46 +14,16 @@ from database.database import get_db
 class QuestionnaireService:
     def __init__(self):
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        
-        # Standard questionnaire questions
-        self.questions = {
-            "learning_style": [
-                "How do you prefer to learn new things?",
-                "Do you prefer hands-on activities or theoretical study?",
-                "How do you handle group projects vs individual work?"
-            ],
-            "personality": [
-                "How would you describe your social energy level?",
-                "Do you prefer structured environments or flexible ones?",
-                "How do you handle stress and pressure?"
-            ],
-            "career_interests": [
-                "What subjects do you enjoy most in school?",
-                "What kind of problems do you like solving?",
-                "What are your long-term career goals?"
-            ],
-            "study_preferences": [
-                "How many hours can you dedicate to studying per week?",
-                "Do you prefer online or in-person learning?",
-                "What size of institution do you prefer?"
-            ],
-            "financial_preferences": [
-                "What is your budget for tuition?",
-                "Are you open to student loans?",
-                "Do you qualify for financial aid?"
-            ]
-        }
-    
-    def get_questionnaire(self) -> Dict[str, List[str]]:
-        """Get the standard questionnaire questions"""
-        return self.questions
     
     async def generate_personality_profile(
         self, 
-        answers: Dict[str, Any], 
-        preferred_majors: List[str]
+        questionnaire_response
     ) -> Dict[str, Any]:
         """Generate personality profile using LLM"""
+        
+        # Extract answers and preferred majors from the questionnaire response
+        answers = questionnaire_response.answers
+        preferred_majors = questionnaire_response.preferred_majors or []
         
         prompt = self._create_personality_prompt(answers, preferred_majors)
         
@@ -85,11 +55,108 @@ class QuestionnaireService:
                 # Fallback to basic structure
                 profile_data = self._create_basic_profile(profile_text, answers, preferred_majors)
             
+            # Generate concise summary
+            summary = await self._generate_personality_summary(profile_data, answers, preferred_majors)
+            profile_data['summary'] = summary
+            
             return profile_data
             
         except Exception as e:
             # Fallback profile if LLM fails
-            return self._create_fallback_profile(answers, preferred_majors)
+            fallback_profile = self._create_fallback_profile(answers, preferred_majors)
+            fallback_summary = self._create_fallback_summary(answers, preferred_majors)
+            fallback_profile['summary'] = fallback_summary
+            return fallback_profile
+
+    async def _generate_personality_summary(
+        self, 
+        profile_data: Dict[str, Any], 
+        answers: Dict[str, Any], 
+        preferred_majors: List[str]
+    ) -> str:
+        """Generate a concise personality summary"""
+        
+        summary_prompt = f"""
+        Based on the following personality profile and questionnaire responses, create a concise, engaging 2-3 sentence summary that captures the user's key personality traits, learning style, and academic interests. This summary should be written in a friendly, professional tone and highlight what makes this person unique.
+
+        Personality Profile:
+        {json.dumps(profile_data, indent=2)}
+
+        Questionnaire Responses:
+        {json.dumps(answers, indent=2)}
+
+        Preferred Majors:
+        {', '.join(preferred_majors)}
+
+        Please write a concise summary (2-3 sentences) that includes:
+        1. Key personality traits
+        2. Learning style preference
+        3. Academic/career interests
+        4. What makes them unique
+
+        Make it engaging and personal, as if describing a friend to someone.
+        """
+        
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at creating concise, engaging personality summaries. Write in a warm, professional tone that captures the essence of a person."
+                    },
+                    {
+                        "role": "user",
+                        "content": summary_prompt
+                    }
+                ],
+                temperature=0.8,
+                max_tokens=200
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            # Fallback summary
+            return self._create_fallback_summary(answers, preferred_majors)
+
+    def _create_fallback_summary(self, answers: Dict[str, Any], preferred_majors: List[str]) -> str:
+        """Create a fallback summary when LLM fails"""
+        
+        # Extract key information from answers
+        answer_text = str(answers).lower()
+        
+        # Determine personality traits
+        traits = []
+        if "introvert" in answer_text or "quiet" in answer_text:
+            traits.append("introverted")
+        elif "extrovert" in answer_text or "social" in answer_text:
+            traits.append("outgoing")
+        else:
+            traits.append("balanced")
+            
+        if "analytical" in answer_text or "logical" in answer_text:
+            traits.append("analytical")
+        elif "creative" in answer_text or "artistic" in answer_text:
+            traits.append("creative")
+        else:
+            traits.append("practical")
+            
+        # Determine learning style
+        if "hands-on" in answer_text or "practical" in answer_text:
+            learning_style = "hands-on learning"
+        elif "visual" in answer_text or "see" in answer_text:
+            learning_style = "visual learning"
+        elif "read" in answer_text or "text" in answer_text:
+            learning_style = "reading and writing"
+        else:
+            learning_style = "mixed learning approaches"
+            
+        # Create summary
+        personality_desc = " and ".join(traits)
+        majors_desc = ", ".join(preferred_majors) if preferred_majors else "various academic fields"
+        
+        return f"This {personality_desc} individual thrives on {learning_style} and shows strong interest in {majors_desc}. They approach challenges with determination and are eager to find the perfect academic environment to support their growth and development."
     
     def _create_personality_prompt(self, answers: Dict[str, Any], preferred_majors: List[str]) -> str:
         """Create prompt for personality analysis"""

@@ -16,16 +16,17 @@ load_dotenv()
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.models import Base as DatabaseBase, User, UniversityDataCollectionResult
+from database.models import Base as DatabaseBase, User, UniversityDataCollectionResult, Question, UserAnswer
 from app.models import Base as AppBase, University, Program, Facility
 from database.database import get_db, engine
 from api.schemas import (
     UserCreate, UserLogin, UserProfile, UserUpdate, AuthResponse,
     UniversityResponse, ProgramResponse,
-    QuestionnaireResponse, PersonalityProfile
+    QuestionnaireResponse, PersonalityProfile,
+    QuestionResponse, UserAnswerCreate, UserAnswerResponse, QuestionnaireSubmission
 )
 from api.auth import get_current_user, create_access_token
-# from api.matching import MatchingService
+from api.matching import MatchingService
 from api.questionnaire import QuestionnaireService
 # from api.school_scraper import SchoolScraperService
 # from api.university_data_collection import router as university_data_router
@@ -98,75 +99,129 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
                 print(f"❌ Registration failed: Username already taken - {user_data.username}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Username is already taken"
+                    detail="Username already taken"
                 )
         
         # Hash password
-        password_hash = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
+        hashed_password = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
         
-        # Create user
-        user = User(
+        # Create new user
+        new_user = User(
             username=user_data.username,
             email=user_data.email,
-            password_hash=password_hash.decode('utf-8'),
+            password_hash=hashed_password.decode('utf-8'),
             name=user_data.name
         )
         
-        db.add(user)
+        db.add(new_user)
         db.commit()
-        db.refresh(user)
+        db.refresh(new_user)
         
         # Create access token
-        access_token = create_access_token(data={"sub": user.email})
+        access_token = create_access_token(data={"sub": new_user.email})
         
-        print(f"✅ New user registered: {user.username} ({user.email})")
-        
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user": user.to_dict(),
-            "message": "User registered successfully"
-        }
+        print(f"✅ Registration successful for: {user_data.email}")
+        return AuthResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=UserProfile(
+                id=str(new_user.id),
+                username=new_user.username,
+                email=new_user.email,
+                name=new_user.name,
+                age=new_user.age,
+                phone=new_user.phone,
+                income=new_user.income,
+                personality_profile=new_user.personality_profile,
+                personality_summary=new_user.personality_summary,
+                questionnaire_answers=new_user.questionnaire_answers,
+                preferred_majors=new_user.preferred_majors,
+                preferred_locations=new_user.preferred_locations,
+                min_acceptance_rate=new_user.min_acceptance_rate,
+                max_tuition=new_user.max_tuition,
+                preferred_university_type=new_user.preferred_university_type,
+                created_at=new_user.created_at,
+                updated_at=new_user.updated_at
+            )
+        )
         
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        # Rollback transaction on error
-        db.rollback()
         print(f"❌ Registration error: {str(e)}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during registration. Please try again."
+            detail="Registration failed"
         )
 
 @app.post("/auth/login", response_model=AuthResponse)
 async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     """Login user"""
-    user = db.query(User).filter(User.email == user_data.email).first()
-    
-    if not user or not bcrypt.checkpw(user_data.password.encode('utf-8'), user.password_hash.encode('utf-8')):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
+    try:
+        user = db.query(User).filter(User.email == user_data.email).first()
+        
+        if not user or not bcrypt.checkpw(user_data.password.encode('utf-8'), user.password_hash.encode('utf-8')):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+        
+        access_token = create_access_token(data={"sub": user.email})
+        
+        return AuthResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=UserProfile(
+                id=str(user.id),
+                username=user.username,
+                email=user.email,
+                name=user.name,
+                age=user.age,
+                phone=user.phone,
+                income=user.income,
+                personality_profile=user.personality_profile,
+                personality_summary=user.personality_summary,
+                questionnaire_answers=user.questionnaire_answers,
+                preferred_majors=user.preferred_majors,
+                preferred_locations=user.preferred_locations,
+                min_acceptance_rate=user.min_acceptance_rate,
+                max_tuition=user.max_tuition,
+                preferred_university_type=user.preferred_university_type,
+                created_at=user.created_at,
+                updated_at=user.updated_at
+            )
         )
-    
-    access_token = create_access_token(data={"sub": user.email})
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": user.to_dict(),
-        "message": "Login successful"
-    }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Login failed"
+        )
 
-# User profile endpoints
 @app.get("/profile", response_model=UserProfile)
 async def get_profile(current_user: User = Depends(get_current_user)):
-    """Get current user's profile"""
-    return current_user.to_dict()
+    """Get current user profile"""
+    return UserProfile(
+        id=str(current_user.id),
+        username=current_user.username,
+        email=current_user.email,
+        name=current_user.name,
+        age=current_user.age,
+        phone=current_user.phone,
+        income=current_user.income,
+        personality_profile=current_user.personality_profile,
+        personality_summary=current_user.personality_summary,
+        questionnaire_answers=current_user.questionnaire_answers,
+        preferred_majors=current_user.preferred_majors,
+        preferred_locations=current_user.preferred_locations,
+        min_acceptance_rate=current_user.min_acceptance_rate,
+        max_tuition=current_user.max_tuition,
+        preferred_university_type=current_user.preferred_university_type,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at
+    )
 
 @app.put("/profile", response_model=UserProfile)
 async def update_profile(
@@ -181,35 +236,224 @@ async def update_profile(
     db.commit()
     db.refresh(current_user)
     
-    return current_user.to_dict()
+    return UserProfile(
+        id=str(current_user.id),
+        username=current_user.username,
+        email=current_user.email,
+        name=current_user.name,
+        age=current_user.age,
+        phone=current_user.phone,
+        income=current_user.income,
+        personality_profile=current_user.personality_profile,
+        personality_summary=current_user.personality_summary,
+        questionnaire_answers=current_user.questionnaire_answers,
+        preferred_majors=current_user.preferred_majors,
+        preferred_locations=current_user.preferred_locations,
+        min_acceptance_rate=current_user.min_acceptance_rate,
+        max_tuition=current_user.max_tuition,
+        preferred_university_type=current_user.preferred_university_type,
+        created_at=current_user.created_at,
+        updated_at=current_user.updated_at
+    )
 
 # Questionnaire endpoints
-@app.post("/questionnaire/submit", response_model=PersonalityProfile)
-async def submit_questionnaire(
-    questionnaire_data: QuestionnaireResponse,
+@app.get("/questions", response_model=List[QuestionResponse])
+async def get_questions(
+    active_only: bool = True,
+    db: Session = Depends(get_db)
+):
+    """Get all questions"""
+    query = db.query(Question)
+    
+    if active_only:
+        query = query.filter(Question.is_active == True)
+    
+    questions = query.order_by(Question.order_index).all()
+    
+    return [
+        QuestionResponse(
+            id=str(question.id),
+            question_text=question.question_text,
+            question_type=question.question_type,
+            category=question.category,
+            order_index=question.order_index,
+            is_active=question.is_active,
+            created_at=question.created_at,
+            updated_at=question.updated_at
+        ) for question in questions
+    ]
+
+@app.get("/questions/{question_id}", response_model=QuestionResponse)
+async def get_question(question_id: str, db: Session = Depends(get_db)):
+    """Get a specific question by ID"""
+    question = db.query(Question).filter(Question.id == question_id).first()
+    
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found"
+        )
+    
+    return QuestionResponse(
+        id=str(question.id),
+        question_text=question.question_text,
+        question_type=question.question_type,
+        category=question.category,
+        order_index=question.order_index,
+        is_active=question.is_active,
+        created_at=question.created_at,
+        updated_at=question.updated_at
+    )
+
+@app.post("/questions/{question_id}/answer", response_model=UserAnswerResponse)
+async def submit_answer(
+    question_id: str,
+    answer_data: UserAnswerCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Submit questionnaire and generate personality profile"""
-    questionnaire_service = QuestionnaireService()
+    """Submit an answer to a specific question"""
     
-    # Save questionnaire answers
-    current_user.questionnaire_answers = questionnaire_data.answers
-    current_user.preferred_majors = questionnaire_data.preferred_majors
-    current_user.preferred_locations = questionnaire_data.preferred_locations
+    # Verify the question exists
+    question = db.query(Question).filter(Question.id == question_id).first()
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found"
+        )
     
-    # Generate personality profile using LLM
-    personality_profile = await questionnaire_service.generate_personality_profile(
-        questionnaire_data.answers,
-        questionnaire_data.preferred_majors
-    )
+    # Check if user already answered this question
+    existing_answer = db.query(UserAnswer).filter(
+        UserAnswer.user_id == current_user.id,
+        UserAnswer.question_id == question_id
+    ).first()
     
-    current_user.personality_profile = personality_profile
+    if existing_answer:
+        # Update existing answer
+        existing_answer.answer_text = answer_data.answer_text
+        existing_answer.answer_data = answer_data.answer_data
+        db.commit()
+        db.refresh(existing_answer)
+        
+        return UserAnswerResponse(
+            id=str(existing_answer.id),
+            user_id=str(existing_answer.user_id),
+            question_id=str(existing_answer.question_id),
+            answer_text=existing_answer.answer_text,
+            answer_data=existing_answer.answer_data,
+            created_at=existing_answer.created_at,
+            updated_at=existing_answer.updated_at
+        )
+    else:
+        # Create new answer
+        new_answer = UserAnswer(
+            user_id=current_user.id,
+            question_id=question_id,
+            answer_text=answer_data.answer_text,
+            answer_data=answer_data.answer_data
+        )
+        
+        db.add(new_answer)
+        db.commit()
+        db.refresh(new_answer)
+        
+        return UserAnswerResponse(
+            id=str(new_answer.id),
+            user_id=str(new_answer.user_id),
+            question_id=str(new_answer.question_id),
+            answer_text=new_answer.answer_text,
+            answer_data=new_answer.answer_data,
+            created_at=new_answer.created_at,
+            updated_at=new_answer.updated_at
+        )
+
+@app.get("/user/answers", response_model=List[UserAnswerResponse])
+async def get_user_answers(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all answers for the current user"""
+    answers = db.query(UserAnswer).filter(UserAnswer.user_id == current_user.id).all()
     
-    db.commit()
-    db.refresh(current_user)
-    
-    return personality_profile
+    return [
+        UserAnswerResponse(
+            id=str(answer.id),
+            user_id=str(answer.user_id),
+            question_id=str(answer.question_id),
+            answer_text=answer.answer_text,
+            answer_data=answer.answer_data,
+            created_at=answer.created_at,
+            updated_at=answer.updated_at
+        ) for answer in answers
+    ]
+
+@app.post("/questionnaire/submit", response_model=PersonalityProfile)
+async def submit_questionnaire(
+    questionnaire_data: QuestionnaireSubmission,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Submit complete questionnaire and generate personality profile"""
+    try:
+        # Save all answers
+        for answer_data in questionnaire_data.answers:
+            # Check if answer already exists
+            existing_answer = db.query(UserAnswer).filter(
+                UserAnswer.user_id == current_user.id,
+                UserAnswer.question_id == answer_data.question_id
+            ).first()
+            
+            if existing_answer:
+                # Update existing answer
+                existing_answer.answer_text = answer_data.answer_text
+                existing_answer.answer_data = answer_data.answer_data
+            else:
+                # Create new answer
+                new_answer = UserAnswer(
+                    user_id=current_user.id,
+                    question_id=answer_data.question_id,
+                    answer_text=answer_data.answer_text,
+                    answer_data=answer_data.answer_data
+                )
+                db.add(new_answer)
+        
+        # Update user preferences
+        if questionnaire_data.preferred_majors:
+            current_user.preferred_majors = questionnaire_data.preferred_majors
+        if questionnaire_data.preferred_locations:
+            current_user.preferred_locations = questionnaire_data.preferred_locations
+        
+        # Generate personality profile
+        questionnaire_service = QuestionnaireService()
+        
+        # Convert answers to the format expected by the service
+        answers_dict = {answer.question_id: answer.answer_text for answer in questionnaire_data.answers}
+        
+        questionnaire_response = QuestionnaireResponse(
+            answers=answers_dict,
+            preferred_majors=questionnaire_data.preferred_majors or [],
+            preferred_locations=questionnaire_data.preferred_locations or []
+        )
+        
+        personality_profile = await questionnaire_service.generate_personality_profile(
+            questionnaire_response
+        )
+        
+        # Update user with personality profile
+        current_user.personality_profile = personality_profile
+        current_user.personality_summary = personality_profile.get('summary', '')
+        
+        db.commit()
+        db.refresh(current_user)
+        
+        return personality_profile
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to submit questionnaire: {str(e)}"
+        )
 
 # University endpoints
 @app.get("/universities", response_model=List[UniversityResponse])
@@ -221,259 +465,208 @@ async def get_universities(
     db: Session = Depends(get_db)
 ):
     """Get universities with optional filtering"""
-    try:
-        query = db.query(UniversityDataCollectionResult)
-        
-        if country:
-            query = query.filter(UniversityDataCollectionResult.country == country)
-        
-        universities = query.offset(skip).limit(limit).all()
-        
-        # Convert UniversityDataCollectionResult to UniversityResponse format
-        result = []
-        for uni in universities:
-            # Create university response object
-            university_response = {
-                "id": uni.id,
-                "name": uni.name or "",
-                "website": uni.website,
-                "country": uni.country,
-                "city": uni.city,
-                "state": uni.state,
-                "phone": uni.phone,
-                "email": uni.email,
-                "founded_year": uni.founded_year,
-                "type": uni.type,
-                "student_population": uni.student_population,
-                "faculty_count": uni.faculty_count,
-                "acceptance_rate": uni.acceptance_rate,
-                "tuition_domestic": uni.tuition_domestic,
-                "tuition_international": uni.tuition_international,
-                "world_ranking": uni.world_ranking,
-                "national_ranking": uni.national_ranking,
-                "description": uni.description,
-                "mission_statement": uni.mission_statement,
-                "vision_statement": uni.vision_statement,
-                "scraped_at": uni.created_at.isoformat() if uni.created_at else None,
-                "last_updated": None,  # Skip this field for now to avoid datetime parsing issues
-                "source_url": uni.source_urls,
-                "confidence_score": uni.confidence_score,
-                "programs": [],  # Simplified for now
-                "facilities": []
-            }
-            result.append(university_response)
-        
-        return result
-        
-    except Exception as e:
-        print(f"Error in get_universities: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}"
-        )
+    query = db.query(University)
+    
+    if country:
+        query = query.filter(University.country == country)
+    
+    if field:
+        # Filter by programs that offer the specified field
+        query = query.join(Program).filter(Program.field.contains(field))
+    
+    universities = query.offset(skip).limit(limit).all()
+    
+    return [
+        UniversityResponse(
+            id=str(university.id),
+            name=university.name,
+            website=university.website,
+            country=university.country,
+            city=university.city,
+            state=university.state,
+            postal_code=university.postal_code,
+            phone=university.phone,
+            email=university.email,
+            founded_year=university.founded_year,
+            type=university.type,
+            accreditation=university.accreditation,
+            student_population=university.student_population,
+            faculty_count=university.faculty_count,
+            acceptance_rate=university.acceptance_rate,
+            tuition_domestic=university.tuition_domestic,
+            tuition_international=university.tuition_international,
+            world_ranking=university.world_ranking,
+            national_ranking=university.national_ranking,
+            description=university.description,
+            mission_statement=university.mission_statement,
+            vision_statement=university.vision_statement,
+            scraped_at=university.scraped_at,
+            last_updated=university.last_updated,
+            source_url=university.source_url,
+            confidence_score=university.confidence_score,
+            programs=[
+                ProgramResponse(
+                    id=str(program.id),
+                    university_id=str(program.university_id),
+                    name=program.name,
+                    level=program.level,
+                    field=program.field,
+                    duration=program.duration,
+                    tuition=program.tuition,
+                    description=program.description
+                ) for program in university.programs
+            ]
+        ) for university in universities
+    ]
 
 @app.get("/universities/{university_id}", response_model=UniversityResponse)
-async def get_university(university_id: int, db: Session = Depends(get_db)):
-    """Get specific university"""
+async def get_university(university_id: str, db: Session = Depends(get_db)):
+    """Get a specific university by ID"""
+    university = db.query(University).filter(University.id == university_id).first()
+    
+    if not university:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="University not found"
+        )
+    
+    return UniversityResponse(
+        id=str(university.id),
+        name=university.name,
+        website=university.website,
+        country=university.country,
+        city=university.city,
+        state=university.state,
+        postal_code=university.postal_code,
+        phone=university.phone,
+        email=university.email,
+        founded_year=university.founded_year,
+        type=university.type,
+        accreditation=university.accreditation,
+        student_population=university.student_population,
+        faculty_count=university.faculty_count,
+        acceptance_rate=university.acceptance_rate,
+        tuition_domestic=university.tuition_domestic,
+        tuition_international=university.tuition_international,
+        world_ranking=university.world_ranking,
+        national_ranking=university.national_ranking,
+        description=university.description,
+        mission_statement=university.mission_statement,
+        vision_statement=university.vision_statement,
+        scraped_at=university.scraped_at,
+        last_updated=university.last_updated,
+        source_url=university.source_url,
+        confidence_score=university.confidence_score,
+        programs=[
+            ProgramResponse(
+                id=str(program.id),
+                university_id=str(program.university_id),
+                name=program.name,
+                level=program.level,
+                field=program.field,
+                duration=program.duration,
+                tuition=program.tuition,
+                description=program.description
+            ) for program in university.programs
+        ]
+    )
+
+# Vector Matching endpoints
+@app.post("/matches/generate")
+async def generate_matches(
+    use_vector_matching: bool = True,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate matches for current user using vector similarity or traditional scoring"""
+    if not current_user.personality_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete the questionnaire first"
+        )
+    
+    matching_service = MatchingService()
+    
     try:
-        university = db.query(UniversityDataCollectionResult).filter(UniversityDataCollectionResult.id == university_id).first()
+        matches = await matching_service.generate_matches(
+            current_user, 
+            db, 
+            use_vector_matching=use_vector_matching,
+            limit=limit
+        )
         
-        if not university:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="University not found"
-            )
-        
-        # Create university response object
-        university_response = {
-            "id": university.id,
-            "name": university.name or "",
-            "website": university.website,
-            "country": university.country,
-            "city": university.city,
-            "state": university.state,
-            "phone": university.phone,
-            "email": university.email,
-            "founded_year": university.founded_year,
-            "type": university.type,
-            "student_population": university.student_population,
-            "faculty_count": university.faculty_count,
-            "acceptance_rate": university.acceptance_rate,
-            "tuition_domestic": university.tuition_domestic,
-            "tuition_international": university.tuition_international,
-            "world_ranking": university.world_ranking,
-            "national_ranking": university.national_ranking,
-            "description": university.description,
-            "mission_statement": university.mission_statement,
-            "vision_statement": university.vision_statement,
-            "scraped_at": university.created_at.isoformat() if university.created_at else None,
-            "last_updated": None,  # Skip this field for now to avoid datetime parsing issues
-            "source_url": university.source_urls,
-            "confidence_score": university.confidence_score,
-            "programs": [],  # Simplified for now
-            "facilities": []
+        return {
+            "message": f"Generated {len(matches)} matches using {'vector similarity' if use_vector_matching else 'traditional scoring'}",
+            "matches": matches,
+            "matching_method": "vector_similarity" if use_vector_matching else "traditional_scoring"
         }
-        
-        return university_response
-        
-    except HTTPException:
-        raise
+    
     except Exception as e:
-        print(f"Error in get_university: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}"
+            detail=f"Failed to generate matches: {str(e)}"
         )
 
-# School endpoints
-# @app.get("/schools", response_model=List[SchoolResponse])
-# async def get_schools(
-#     skip: int = 0,
-#     limit: int = 100,
-#     country: Optional[str] = None,
-#     state: Optional[str] = None,
-#     db: Session = Depends(get_db)
-# ):
-#     """Get schools with optional filtering"""
-#     query = db.query(School)
+@app.get("/matches/compare")
+async def compare_matching_methods(
+    limit: int = 10,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Compare vector matching vs traditional matching results"""
+    if not current_user.personality_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete the questionnaire first"
+        )
     
-#     if country:
-#         query = query.filter(School.country == country)
+    matching_service = MatchingService()
     
-#     if state:
-#         query = query.filter(School.state == state)
+    try:
+        comparison = await matching_service.compare_matching_methods(current_user, db, limit)
+        return comparison
     
-#     schools = query.offset(skip).limit(limit).all()
-#     return [school.to_dict() for school in schools]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to compare matching methods: {str(e)}"
+        )
 
-# @app.post("/schools/scrape")
-# async def scrape_school_data(
-#     school_name: str,
-#     current_user: User = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     """Scrape school data using browser automation"""
-#     scraper_service = SchoolScraperService()
+@app.get("/matches/similar-users")
+async def get_similar_users(
+    limit: int = 10,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Find users with similar profiles using vector similarity"""
+    if not current_user.personality_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete the questionnaire first"
+        )
     
-#     try:
-#         school_data = await scraper_service.scrape_school(school_name)
-        
-#         # Save to database
-#         school = School(**school_data)
-#         db.add(school)
-#         db.commit()
-#         db.refresh(school)
-        
-#         return {"message": "School data scraped successfully", "school": school.to_dict()}
+    matching_service = MatchingService()
     
-#     except Exception as e:
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail=f"Failed to scrape school data: {str(e)}"
-#         )
+    try:
+        similar_users = await matching_service.get_similar_users(current_user, db, limit)
+        return {
+            "similar_users": similar_users,
+            "total_found": len(similar_users)
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to find similar users: {str(e)}"
+        )
 
-# Matching endpoints
-# @app.post("/matches/generate")
-# async def generate_matches(
-#     current_user: User = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     """Generate matches for current user"""
-#     if not current_user.personality_profile:
-#         raise HTTPException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail="Please complete the questionnaire first"
-#         )
-    
-#     matching_service = MatchingService()
-    
-#     try:
-#         matches = await matching_service.generate_matches(current_user, db)
-        
-#         # Save matches to database
-#         for match_data in matches:
-#             match = UserMatch(
-#                 user_id=current_user.id,
-#                 university_id=match_data["university_id"],
-#                 program_id=match_data.get("program_id"),
-#                 overall_score=match_data["overall_score"],
-#                 academic_fit_score=match_data.get("academic_fit_score"),
-#                 financial_fit_score=match_data.get("financial_fit_score"),
-#                 location_fit_score=match_data.get("location_fit_score"),
-#                 personality_fit_score=match_data.get("personality_fit_score"),
-#                 user_preferences=match_data.get("user_preferences")
-#             )
-#             db.add(match)
-        
-#         db.commit()
-        
-#         return {"message": f"Generated {len(matches)} matches", "matches": matches}
-    
-#     except Exception as e:
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail=f"Failed to generate matches: {str(e)}"
-#         )
-
-# @app.get("/matches", response_model=List[MatchResponse])
-# async def get_user_matches(
-#     current_user: User = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     """Get user's matches"""
-#     matches = db.query(UserMatch).filter(UserMatch.user_id == current_user.id).all()
-#     return [match.to_dict() for match in matches]
-
-# @app.put("/matches/{match_id}/favorite")
-# async def toggle_favorite(
-#     match_id: int,
-#     current_user: User = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     """Toggle favorite status for a match"""
-#     match = db.query(UserMatch).filter(
-#         UserMatch.id == match_id,
-#         UserMatch.user_id == current_user.id
-#     ).first()
-    
-#     if not match:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="Match not found"
-#         )
-    
-#     match.is_favorite = not match.is_favorite
-#     db.commit()
-    
-#     return {"message": "Favorite status updated", "is_favorite": match.is_favorite}
-
-# @app.put("/matches/{match_id}/notes")
-# async def update_match_notes(
-#     match_id: int,
-#     notes: str,
-#     current_user: User = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     """Update notes for a match"""
-#     match = db.query(UserMatch).filter(
-#         UserMatch.id == match_id,
-#         UserMatch.user_id == current_user.id
-#     ).first()
-    
-#     if not match:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="Match not found"
-#         )
-    
-#     match.notes = notes
-#     db.commit()
-    
-#     return {"message": "Notes updated successfully"}
+@app.post("/matches/clear-cache")
+async def clear_matching_cache(current_user: User = Depends(get_current_user)):
+    """Clear the vector matching cache"""
+    matching_service = MatchingService()
+    matching_service.clear_vector_cache()
+    return {"message": "Vector matching cache cleared successfully"}
 
 if __name__ == "__main__":
     import uvicorn

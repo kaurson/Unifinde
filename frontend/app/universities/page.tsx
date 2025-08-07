@@ -21,14 +21,14 @@ import {
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { apiService, University } from '@/lib/api'
+import { api, University } from '@/lib/api'
 
 export default function UniversitiesPage() {
   const [universities, setUniversities] = useState<University[]>([])
   const [filteredUniversities, setFilteredUniversities] = useState<University[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const [favorites, setFavorites] = useState<number[]>([])
+  const [favorites, setFavorites] = useState<string[]>([])
   const router = useRouter()
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export default function UniversitiesPage() {
     const loadUniversities = async () => {
       setIsLoading(true)
       try {
-        const data = await apiService.getUniversities()
+        const data = await api.getUniversities()
         setUniversities(data)
         setFilteredUniversities(data)
         toast.success('University matches loaded successfully!')
@@ -66,7 +66,7 @@ export default function UniversitiesPage() {
     setFilteredUniversities(filtered)
   }, [searchQuery, universities])
 
-  const toggleFavorite = (universityId: number) => {
+  const toggleFavorite = (universityId: string) => {
     setFavorites(prev => 
       prev.includes(universityId) 
         ? prev.filter(id => id !== universityId)
@@ -74,7 +74,7 @@ export default function UniversitiesPage() {
     )
   }
 
-  const handleUniversityClick = (universityId: number) => {
+  const handleUniversityClick = (universityId: string) => {
     router.push(`/universities/${universityId}`)
   }
 

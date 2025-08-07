@@ -3,6 +3,8 @@ from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
 from typing import Optional, List, Dict, Any
 import json
+import uuid
+from datetime import datetime
 
 class Base(DeclarativeBase):
     pass
@@ -10,7 +12,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = 'users'
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     username = Column(String(50), unique=True, nullable=False, index=True)
     email = Column(String(120), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
@@ -21,6 +23,7 @@ class User(Base):
     
     # Profile information
     personality_profile = Column(JSON, nullable=True)  # LLM-generated personality analysis
+    personality_summary = Column(Text, nullable=True)  # Concise text summary
     questionnaire_answers = Column(JSON, nullable=True)  # Raw questionnaire responses
     preferred_majors = Column(JSON, nullable=True)  # List of preferred fields of study
     preferred_locations = Column(JSON, nullable=True)  # Preferred study locations
@@ -35,6 +38,7 @@ class User(Base):
     
     # Relationships
     student_profile = relationship("StudentProfile", back_populates="user", uselist=False)
+    user_answers = relationship("UserAnswer", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f'<User {self.username}>'
@@ -42,7 +46,7 @@ class User(Base):
     def to_dict(self) -> dict:
         """Convert user object to dictionary"""
         return {
-            'id': self.id,
+            'id': str(self.id),
             'username': self.username,
             'email': self.email,
             'name': self.name,
@@ -50,6 +54,7 @@ class User(Base):
             'phone': self.phone,
             'income': self.income,
             'personality_profile': self.personality_profile,
+            'personality_summary': self.personality_summary,
             'questionnaire_answers': self.questionnaire_answers,
             'preferred_majors': self.preferred_majors,
             'preferred_locations': self.preferred_locations,
@@ -61,11 +66,74 @@ class User(Base):
             'student_profile': self.student_profile.to_dict() if self.student_profile else None
         }
 
+class Question(Base):
+    __tablename__ = 'questions'
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    question_text = Column(Text, nullable=False, unique=True)
+    question_type = Column(String(50), nullable=False, default='text')  # text, multiple_choice, scale, etc.
+    category = Column(String(100), nullable=True)  # personality, preferences, etc.
+    order_index = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, default=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    user_answers = relationship("UserAnswer", back_populates="question", cascade="all, delete-orphan")
+    
+    def __repr__(self) -> str:
+        return f'<Question {self.question_text[:50]}...>'
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert question object to dictionary"""
+        return {
+            'id': str(self.id),
+            'question_text': self.question_text,
+            'question_type': self.question_type,
+            'category': self.category,
+            'order_index': self.order_index,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+class UserAnswer(Base):
+    __tablename__ = 'user_answers'
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
+    question_id = Column(String(36), ForeignKey('questions.id'), nullable=False)
+    answer_text = Column(Text, nullable=False)
+    answer_data = Column(JSON, nullable=True)  # For structured answers (choices, ratings, etc.)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="user_answers")
+    question = relationship("Question", back_populates="user_answers")
+    
+    def __repr__(self) -> str:
+        return f'<UserAnswer {self.user_id} - {self.question_id}>'
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert user answer object to dictionary"""
+        return {
+            'id': str(self.id),
+            'user_id': str(self.user_id),
+            'question_id': str(self.question_id),
+            'answer_text': self.answer_text,
+            'answer_data': self.answer_data,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
 class StudentProfile(Base):
     __tablename__ = 'student_profiles'
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False, unique=True)
     
     # Academic Information
     current_school = Column(String(200), nullable=True)
@@ -142,13 +210,13 @@ class StudentProfile(Base):
     user = relationship("User", back_populates="student_profile")
     
     def __repr__(self) -> str:
-        return f'<StudentProfile {self.user.name if self.user else "Unknown"}>'
+        return f'<StudentProfile {self.user_id}>'
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert student profile object to dictionary"""
         return {
-            'id': self.id,
-            'user_id': self.user_id,
+            'id': str(self.id),
+            'user_id': str(self.user_id),
             'current_school': self.current_school,
             'graduation_year': self.graduation_year,
             'gpa': self.gpa,
@@ -199,44 +267,28 @@ class StudentProfile(Base):
         }
     
     def calculate_completion_percentage(self) -> float:
-        """Calculate the percentage of profile completion"""
-        total_fields = 0
-        completed_fields = 0
+        """Calculate the completion percentage of the student profile"""
+        fields = [
+            self.current_school, self.graduation_year, self.gpa, self.class_rank,
+            self.sat_total, self.act_composite, self.ap_scores, self.ib_diploma,
+            self.honors_classes, self.academic_awards, self.research_experience,
+            self.leadership_positions, self.volunteer_hours, self.work_experience,
+            self.sports_activities, self.artistic_activities, self.citizenship,
+            self.first_language, self.languages_spoken, self.family_income,
+            self.preferred_class_size, self.preferred_teaching_style,
+            self.preferred_campus_environment, self.career_aspirations,
+            self.industry_preferences, self.salary_expectations
+        ]
         
-        # Basic academic info
-        academic_fields = ['current_school', 'graduation_year', 'gpa', 'class_rank', 'class_size']
-        for field in academic_fields:
-            total_fields += 1
-            if getattr(self, field) is not None:
-                completed_fields += 1
+        completed_fields = sum(1 for field in fields if field is not None and field != "")
+        total_fields = len(fields)
         
-        # Test scores
-        test_fields = ['sat_total', 'act_composite']
-        for field in test_fields:
-            total_fields += 1
-            if getattr(self, field) is not None:
-                completed_fields += 1
-        
-        # Extracurricular
-        extra_fields = ['leadership_positions', 'volunteer_hours', 'work_experience', 'sports_activities']
-        for field in extra_fields:
-            total_fields += 1
-            if getattr(self, field) is not None:
-                completed_fields += 1
-        
-        # Preferences
-        pref_fields = ['preferred_class_size', 'preferred_campus_environment', 'career_aspirations']
-        for field in pref_fields:
-            total_fields += 1
-            if getattr(self, field) is not None:
-                completed_fields += 1
-        
-        return (completed_fields / total_fields * 100) if total_fields > 0 else 0.0
+        return (completed_fields / total_fields) * 100 if total_fields > 0 else 0.0
 
 class UniversityDataCollectionResult(Base):
     __tablename__ = 'university_data_collection_results'
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     
     # Metadata fields
     total_universities = Column(Integer, nullable=True)
@@ -303,7 +355,7 @@ class UniversityDataCollectionResult(Base):
     def to_dict(self) -> Dict[str, Any]:
         """Convert university data collection result object to dictionary"""
         return {
-            'id': self.id,
+            'id': str(self.id),
             'total_universities': self.total_universities,
             'successful_collections': self.successful_collections,
             'failed_collections': self.failed_collections,

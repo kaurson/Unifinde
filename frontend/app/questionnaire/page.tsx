@@ -1,38 +1,78 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, CheckCircle, XCircle, ArrowRight, Brain } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Brain, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { api, Question, UserAnswer } from '@/lib/api'
+import { QuestionComponent } from '@/components/questionnaire/QuestionComponents'
 
 export default function QuestionnairePage() {
   const router = useRouter()
+  const [questions, setQuestions] = useState<Question[]>([])
   const [currentQuestion, setCurrentQuestion] = useState(0)
-  const [answers, setAnswers] = useState<{ [key: number]: boolean | null }>({})
+  const [answers, setAnswers] = useState<{ [key: string]: any }>({})
+  const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
 
-  // Simple questionnaire with one true/false question for now
-  const questions = [
-    {
-      id: 1,
-      question: "Do you prefer working in teams rather than individually?",
-      type: "true_false"
+  // Check authentication on component mount
+  useEffect(() => {
+    const checkAuth = () => {
+      const auth = api.isAuthenticated()
+      setIsAuthenticated(auth)
+      
+      if (!auth) {
+        toast.error('Please login to take the questionnaire')
+        router.push('/login')
+        return
+      }
     }
-  ]
 
-  const handleAnswer = (answer: boolean) => {
-    setAnswers(prev => ({
-      ...prev,
-      [currentQuestion]: answer
-    }))
+    checkAuth()
+  }, [router])
+
+  // Fetch questions from database
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      if (isAuthenticated === null) return // Wait for auth check
+      
+      try {
+        const fetchedQuestions = await api.getQuestions()
+        setQuestions(fetchedQuestions.sort((a, b) => a.order_index - b.order_index))
+      } catch (error) {
+        console.error('Error fetching questions:', error)
+        toast.error('Failed to load questions. Please try again.')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    // Only fetch questions if user is authenticated
+    if (isAuthenticated) {
+      fetchQuestions()
+    }
+  }, [isAuthenticated])
+
+  const handleAnswer = (answer: any) => {
+    const currentQ = questions[currentQuestion]
+    if (currentQ) {
+      setAnswers(prev => ({
+        ...prev,
+        [currentQ.id]: answer
+      }))
+    }
   }
 
   const handleNext = async () => {
-    if (answers[currentQuestion] === null || answers[currentQuestion] === undefined) {
+    const currentQ = questions[currentQuestion]
+    if (!currentQ) return
+
+    if (answers[currentQ.id] === null || answers[currentQ.id] === undefined || answers[currentQ.id] === '') {
       toast.error('Please answer the question before continuing')
       return
     }
@@ -46,20 +86,41 @@ export default function QuestionnairePage() {
   }
 
   const handleSubmit = async () => {
+    // Check authentication before submitting
+    if (!api.isAuthenticated()) {
+      toast.error('Please login to submit the questionnaire')
+      router.push('/login')
+      return
+    }
+
     setIsSubmitting(true)
     
     try {
-      // Here you would typically send the answers to your backend
-      // For now, we'll just simulate the process
-      console.log('Questionnaire answers:', answers)
+      // Convert answers to the format expected by the API
+      const answerData: UserAnswer[] = Object.entries(answers).map(([questionId, answer]) => ({
+        question_id: questionId,
+        answer_text: String(answer),
+        answer_data: { value: answer }
+      }))
+
+      const submissionData = {
+        answers: answerData,
+        preferred_majors: [],
+        preferred_locations: []
+      }
+
+      console.log('Submitting questionnaire:', submissionData)
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Submit to API
+      await api.submitQuestionnaire(submissionData)
       
-      toast.success('Questionnaire completed! Redirecting to universities...')
+      // Get current user profile to get the ID
+      const userProfile = await api.getProfile()
       
-      // Redirect to universities page
-      router.push('/universities')
+      toast.success('Questionnaire completed! Redirecting to your summary...')
+      
+      // Redirect to summary page
+      router.push(`/summary/${userProfile.id}`)
     } catch (error) {
       console.error('Error submitting questionnaire:', error)
       toast.error('Failed to submit questionnaire. Please try again.')
@@ -68,8 +129,137 @@ export default function QuestionnairePage() {
     }
   }
 
+  const handleSkipQuestionnaire = async () => {
+    // Check authentication before submitting
+    if (!api.isAuthenticated()) {
+      toast.error('Please login to submit the questionnaire')
+      router.push('/login')
+      return
+    }
+
+    setIsSubmitting(true)
+    
+    try {
+      // Get actual questions from database to use real IDs
+      const actualQuestions = await api.getQuestions()
+      const sortedQuestions = actualQuestions.sort((a, b) => a.order_index - b.order_index)
+      
+      // Sample data for testing using real question IDs
+      const sampleAnswers: UserAnswer[] = sortedQuestions.map((question, index) => {
+        // Generate appropriate sample answers based on question type
+        let sampleAnswer: any = ''
+        
+        switch (question.question_type) {
+          case 'boolean':
+            sampleAnswer = index % 2 === 0 ? true : false
+            break
+          case 'text':
+            sampleAnswer = `Sample answer for question ${index + 1}: I am interested in learning and personal growth.`
+            break
+          case 'integer':
+            sampleAnswer = Math.floor(Math.random() * 10) + 1
+            break
+          case 'float':
+            sampleAnswer = (Math.random() * 10).toFixed(1)
+            break
+          case 'scale_0_10':
+            sampleAnswer = Math.floor(Math.random() * 11)
+            break
+          case 'multiple_choice_3':
+            sampleAnswer = ['breakfast', 'lunch', 'midnight snack'][index % 3]
+            break
+          case 'multiple_choice_5':
+            sampleAnswer = ['Take turns chewing it', 'chew it together at the same time', 'take it yourself', 'throw it away (no one deserves it)', 'Give it to your friend'][index % 5]
+            break
+          default:
+            sampleAnswer = `Sample answer for question ${index + 1}`
+        }
+        
+        return {
+          question_id: question.id,
+          answer_text: String(sampleAnswer),
+          answer_data: { value: sampleAnswer }
+        }
+      })
+
+      const submissionData = {
+        answers: sampleAnswers,
+        preferred_majors: ["Computer Science", "Engineering", "Data Science"],
+        preferred_locations: ["United States", "Canada", "United Kingdom"]
+      }
+
+      console.log('Submitting sample questionnaire data:', submissionData)
+      
+      // Submit to API
+      await api.submitQuestionnaire(submissionData)
+      
+      // Get current user profile to get the ID
+      const userProfile = await api.getProfile()
+      
+      toast.success('Sample questionnaire submitted! Redirecting to your summary...')
+      
+      // Redirect to summary page
+      router.push(`/summary/${userProfile.id}`)
+    } catch (error) {
+      console.error('Error submitting sample questionnaire:', error)
+      toast.error('Failed to submit sample questionnaire. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Show loading while checking authentication
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-lg">Checking authentication...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render anything if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <p className="text-lg mb-4">Please login to access the questionnaire.</p>
+          <Link href="/login" className="text-primary hover:underline">
+            Go to Login
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-lg">Loading questions...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <p className="text-lg mb-4">No questions available.</p>
+          <Link href="/" className="text-primary hover:underline">
+            Return to home
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   const currentQ = questions[currentQuestion]
-  const hasAnswered = answers[currentQuestion] !== null && answers[currentQuestion] !== undefined
+  const hasAnswered = currentQ && (answers[currentQ.id] !== null && answers[currentQ.id] !== undefined && answers[currentQ.id] !== '')
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
@@ -95,6 +285,26 @@ export default function QuestionnairePage() {
           <p className="text-muted-foreground">
             Answer a few questions to help us find your perfect university match
           </p>
+          
+          {/* Skip Questionnaire Button for Testing */}
+          <div className="mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSkipQuestionnaire}
+              disabled={isSubmitting}
+              className="text-xs"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                '🚀 Skip Questionnaire (Testing)'
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Progress Bar */}
@@ -126,39 +336,15 @@ export default function QuestionnairePage() {
           <CardContent className="space-y-6">
             {/* Question */}
             <div className="text-center">
-              <p className="text-lg font-medium mb-6">{currentQ.question}</p>
+              <p className="text-lg font-medium mb-6">{currentQ.question_text}</p>
             </div>
 
-            {/* Answer Options */}
-            <div className="grid grid-cols-2 gap-4">
-              <Button
-                variant={answers[currentQuestion] === true ? "default" : "outline"}
-                size="lg"
-                className={`h-16 text-lg transition-all ${
-                  answers[currentQuestion] === true 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'hover:bg-primary/10'
-                }`}
-                onClick={() => handleAnswer(true)}
-              >
-                <CheckCircle className="h-5 w-5 mr-2" />
-                True
-              </Button>
-              
-              <Button
-                variant={answers[currentQuestion] === false ? "default" : "outline"}
-                size="lg"
-                className={`h-16 text-lg transition-all ${
-                  answers[currentQuestion] === false 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'hover:bg-primary/10'
-                }`}
-                onClick={() => handleAnswer(false)}
-              >
-                <XCircle className="h-5 w-5 mr-2" />
-                False
-              </Button>
-            </div>
+            {/* Question Component */}
+            <QuestionComponent
+              question={currentQ}
+              answer={answers[currentQ.id]}
+              onAnswer={handleAnswer}
+            />
 
             <Separator />
 
@@ -179,7 +365,10 @@ export default function QuestionnairePage() {
                 className="min-w-[120px]"
               >
                 {isSubmitting ? (
-                  'Processing...'
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
                 ) : currentQuestion === questions.length - 1 ? (
                   <>
                     Complete
@@ -205,10 +394,6 @@ export default function QuestionnairePage() {
             <div className="flex items-center">
               <Brain className="h-3 w-3 mr-1" />
               <span>AI Analysis</span>
-            </div>
-            <div className="flex items-center">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              <span>Personalized Results</span>
             </div>
             <div className="flex items-center">
               <ArrowRight className="h-3 w-3 mr-1" />

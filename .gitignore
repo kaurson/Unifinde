@@ -11,3 +11,4 @@ database/__pycache__
 alembic/__pycache__
 app/output
 *.db
+alembic/__pycache__

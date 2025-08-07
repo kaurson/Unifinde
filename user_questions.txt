@@ -1,0 +1,23 @@
+Would you rather marry Stephen Hawking or a short shelf-life chocolate cake? —-- true or false 
+Who is/was your childhood celebrity crush? —- text
+Do you put bread in the fridge or the cabinet? —-- true or false
+Has evolution changed your life? —- text
+Do you thank ChatGPT? Why? —-- text
+Your most unpopular opinion.	 —- text
+What is the acceptable height of a sock starting from the ankle? —- float
+Beans? breakfast / lunch / midnight snack  —- 3 options
+Why did the chicken come before the egg? —- text
+Why did the egg come before the chicken? —-- text
+Diving into the Mariana Trench or climbing Mount Everest? —- true or false
+How many people do you need to steal a car? — scale from 0 to 10
+Who’s your favourite villain? —- text
+One piece of gum left, and your friend asks for one? Take turns chewing it / chew it together at the same time / take it yourself / throw it away (no one deserves it) / Give it to your friend —- 5 options
+Would you rather have the professors send you streak snaps or them never even knowing your name? —- true or false
+How many “in one” does your shampoo have? — integer
+In what order do you dry yourself after a shower? —- text
+The Trolley problem.  A trolley is heading toward 5 people. You can pull a lever to divert it — but it will hit your grandma, who’s going to die soon anyway. Do you pull the lever? — true or false
+Would you rather be a boulder or a grain of sand? — text
+Cereal or milk first? —- true or false
+Best Ice Cream flavour? —-- text
+Would you rather live in an apartment but  on the first floor, or in a house but only in the attic? —- true or false
+Favorite internet trend? —-- text

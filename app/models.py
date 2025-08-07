@@ -3,6 +3,7 @@ from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
 from typing import Optional, List, Dict, Any
 import json
+import uuid
 
 class Base(DeclarativeBase):
     pass
@@ -10,7 +11,7 @@ class Base(DeclarativeBase):
 class University(Base):
     __tablename__ = 'universities'
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(200), nullable=False, index=True)
     website = Column(String(500), nullable=True)
     country = Column(String(100), nullable=True)
@@ -57,7 +58,7 @@ class University(Base):
     def to_dict(self) -> Dict[str, Any]:
         """Convert university object to dictionary"""
         return {
-            'id': self.id,
+            'id': str(self.id),
             'name': self.name,
             'website': self.website,
             'country': self.country,
@@ -90,36 +91,38 @@ class University(Base):
 class Program(Base):
     __tablename__ = 'programs'
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    university_id = Column(Integer, ForeignKey('universities.id'), nullable=False)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    university_id = Column(String(36), ForeignKey('universities.id'), nullable=False)
     name = Column(String(200), nullable=False)
     level = Column(String(50), nullable=True)  # Bachelor, Master, PhD, etc.
     field = Column(String(100), nullable=True)  # Computer Science, Engineering, etc.
     duration = Column(String(50), nullable=True)  # 4 years, 2 years, etc.
     tuition = Column(Float, nullable=True)
     description = Column(Text, nullable=True)
-    requirements = Column(Text, nullable=True)
     
     university = relationship("University", back_populates="programs")
     
+    def __repr__(self) -> str:
+        return f'<Program {self.name}>'
+    
     def to_dict(self) -> Dict[str, Any]:
+        """Convert program object to dictionary"""
         return {
-            'id': self.id,
-            'university_id': self.university_id,
+            'id': str(self.id),
+            'university_id': str(self.university_id),
             'name': self.name,
             'level': self.level,
             'field': self.field,
             'duration': self.duration,
             'tuition': self.tuition,
-            'description': self.description,
-            'requirements': self.requirements
+            'description': self.description
         }
 
 class Facility(Base):
     __tablename__ = 'facilities'
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    university_id = Column(Integer, ForeignKey('universities.id'), nullable=False)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    university_id = Column(String(36), ForeignKey('universities.id'), nullable=False)
     name = Column(String(200), nullable=False)
     type = Column(String(100), nullable=True)  # Library, Lab, Sports, etc.
     description = Column(Text, nullable=True)
@@ -127,10 +130,14 @@ class Facility(Base):
     
     university = relationship("University", back_populates="facilities")
     
+    def __repr__(self) -> str:
+        return f'<Facility {self.name}>'
+    
     def to_dict(self) -> Dict[str, Any]:
+        """Convert facility object to dictionary"""
         return {
-            'id': self.id,
-            'university_id': self.university_id,
+            'id': str(self.id),
+            'university_id': str(self.university_id),
             'name': self.name,
             'type': self.type,
             'description': self.description,

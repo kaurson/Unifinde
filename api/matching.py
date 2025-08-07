@@ -9,12 +9,15 @@ import sys
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.models import User, University, Program, UserMatch
+from database.models import User, StudentProfile
+from app.models import University, Program
 from database.database import get_db
+from api.vector_matcher import VectorMatchingService
 
 class MatchingService:
     def __init__(self):
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.vector_matcher = VectorMatchingService()
         
         # Matching weights
         self.weights = {
@@ -24,8 +27,34 @@ class MatchingService:
             "personality_fit": 0.25
         }
     
-    async def generate_matches(self, user: User, db: Session) -> List[Dict[str, Any]]:
-        """Generate matches for a user"""
+    async def generate_matches(self, user: User, db: Session, use_vector_matching: bool = True, limit: int = 20) -> List[Dict[str, Any]]:
+        """Generate matches for a user using either vector similarity or traditional scoring"""
+        
+        if use_vector_matching:
+            return await self._generate_vector_matches(user, db, limit)
+        else:
+            return await self._generate_traditional_matches(user, db, limit)
+    
+    async def _generate_vector_matches(self, user: User, db: Session, limit: int = 20) -> List[Dict[str, Any]]:
+        """Generate matches using vector similarity"""
+        
+        try:
+            matches = await self.vector_matcher.find_matches(user, db, limit)
+            
+            # Add additional metadata
+            for match in matches:
+                match["matching_method"] = "vector_similarity"
+                match["confidence"] = self._calculate_confidence(match["similarity_score"])
+                
+            return matches
+            
+        except Exception as e:
+            print(f"Error in vector matching: {e}")
+            # Fallback to traditional matching
+            return await self._generate_traditional_matches(user, db, limit)
+    
+    async def _generate_traditional_matches(self, user: User, db: Session, limit: int = 20) -> List[Dict[str, Any]]:
+        """Generate matches using traditional scoring system"""
         
         # Get all universities and programs
         universities = db.query(University).all()
@@ -41,33 +70,85 @@ class MatchingService:
                 # Create a match with just the university
                 match_score = await self._calculate_match_score(user, university, None)
                 matches.append({
-                    "university_id": university.id,
+                    "university_id": str(university.id),
                     "program_id": None,
+                    "university_name": university.name,
                     "overall_score": match_score["overall"],
                     "academic_fit_score": match_score["academic"],
                     "financial_fit_score": match_score["financial"],
                     "location_fit_score": match_score["location"],
                     "personality_fit_score": match_score["personality"],
-                    "user_preferences": self._get_user_preferences(user)
+                    "similarity_score": match_score["overall"],  # For compatibility
+                    "matching_method": "traditional_scoring",
+                    "confidence": self._calculate_confidence(match_score["overall"]),
+                    "user_preferences": self._get_user_preferences(user),
+                    "university_data": university.to_dict()
                 })
             else:
                 # Create matches for each program
                 for program in university_programs:
                     match_score = await self._calculate_match_score(user, university, program)
                     matches.append({
-                        "university_id": university.id,
-                        "program_id": program.id,
+                        "university_id": str(university.id),
+                        "program_id": str(program.id),
+                        "university_name": university.name,
+                        "program_name": program.name,
                         "overall_score": match_score["overall"],
                         "academic_fit_score": match_score["academic"],
                         "financial_fit_score": match_score["financial"],
                         "location_fit_score": match_score["location"],
                         "personality_fit_score": match_score["personality"],
-                        "user_preferences": self._get_user_preferences(user)
+                        "similarity_score": match_score["overall"],  # For compatibility
+                        "matching_method": "traditional_scoring",
+                        "confidence": self._calculate_confidence(match_score["overall"]),
+                        "user_preferences": self._get_user_preferences(user),
+                        "university_data": university.to_dict(),
+                        "program_data": program.to_dict()
                     })
         
         # Sort by overall score and return top matches
         matches.sort(key=lambda x: x["overall_score"], reverse=True)
-        return matches[:20]  # Return top 20 matches
+        return matches[:limit]
+    
+    def _calculate_confidence(self, score: float) -> str:
+        """Calculate confidence level based on score"""
+        if score >= 0.8:
+            return "high"
+        elif score >= 0.6:
+            return "medium"
+        elif score >= 0.4:
+            return "low"
+        else:
+            return "very_low"
+    
+    async def get_similar_users(self, user: User, db: Session, limit: int = 10) -> List[Dict[str, Any]]:
+        """Find users with similar profiles using vector similarity"""
+        return await self.vector_matcher.get_similar_users(user, db, limit)
+    
+    async def compare_matching_methods(self, user: User, db: Session, limit: int = 10) -> Dict[str, Any]:
+        """Compare vector matching vs traditional matching results"""
+        
+        # Get matches using both methods
+        vector_matches = await self._generate_vector_matches(user, db, limit)
+        traditional_matches = await self._generate_traditional_matches(user, db, limit)
+        
+        # Find common universities
+        vector_university_ids = {match["university_id"] for match in vector_matches}
+        traditional_university_ids = {match["university_id"] for match in traditional_matches}
+        
+        common_universities = vector_university_ids & traditional_university_ids
+        
+        # Create comparison
+        comparison = {
+            "vector_matches": vector_matches,
+            "traditional_matches": traditional_matches,
+            "common_universities": len(common_universities),
+            "vector_only": len(vector_university_ids - traditional_university_ids),
+            "traditional_only": len(traditional_university_ids - vector_university_ids),
+            "overlap_percentage": len(common_universities) / max(len(vector_university_ids), len(traditional_university_ids)) * 100
+        }
+        
+        return comparison
     
     async def _calculate_match_score(self, user: User, university: University, program: Program = None) -> Dict[str, float]:
         """Calculate match scores between user and university/program"""
@@ -299,4 +380,8 @@ class MatchingService:
             "min_acceptance_rate": user.min_acceptance_rate,
             "max_tuition": user.max_tuition,
             "preferred_university_type": user.preferred_university_type
-        } 
+        }
+    
+    def clear_vector_cache(self):
+        """Clear the vector matching cache"""
+        self.vector_matcher.clear_cache() 

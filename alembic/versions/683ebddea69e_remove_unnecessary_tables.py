@@ -1,7 +1,7 @@
 """remove_unnecessary_tables
 
 Revision ID: 683ebddea69e
-Revises: f45ca20e5ad8
+Revises: fd1877ccfd89
 Create Date: 2025-08-07 01:15:30.123456
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '683ebddea69e'
-down_revision: Union[str, None] = 'f45ca20e5ad8'
+down_revision: Union[str, None] = 'fd1877ccfd89'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

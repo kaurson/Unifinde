@@ -28,7 +28,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { apiService, University } from '@/lib/api'
+import { api, University } from '@/lib/api'
 
 export default function UniversityDetailPage() {
   const params = useParams()
@@ -37,11 +37,11 @@ export default function UniversityDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isFavorite, setIsFavorite] = useState(false)
 
-  const universityId = parseInt(params.id as string)
+  const universityId = params.id as string
 
   useEffect(() => {
     const loadUniversity = async () => {
-      if (!universityId || isNaN(universityId)) {
+      if (!universityId) {
         toast.error('Invalid university ID')
         router.push('/universities')
         return
@@ -49,7 +49,7 @@ export default function UniversityDetailPage() {
 
       setIsLoading(true)
       try {
-        const data = await apiService.getUniversity(universityId)
+        const data = await api.getUniversity(universityId)
         setUniversity(data)
         toast.success('University details loaded successfully!')
       } catch (error) {
