@@ -8,18 +8,28 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Database configuration - SQLite only
+# Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./universities.db")
 
-print("🔧 Using SQLite database")
+# Check if we're using SQLite or PostgreSQL
+is_sqlite = DATABASE_URL.startswith("sqlite")
 
-# Create engine for SQLite
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-    echo=False,  # Disable SQL logging for cleaner output
-)
+if is_sqlite:
+    print("🔧 Using SQLite database")
+    # Create engine for SQLite
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        echo=False,  # Disable SQL logging for cleaner output
+    )
+else:
+    print("🔧 Using PostgreSQL database")
+    # Create engine for PostgreSQL
+    engine = create_engine(
+        DATABASE_URL,
+        echo=False,  # Disable SQL logging for cleaner output
+    )
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

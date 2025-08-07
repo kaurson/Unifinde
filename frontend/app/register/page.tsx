@@ -89,17 +89,30 @@ export default function RegisterPage() {
       })
       console.log('Register API response:', response)
 
-      if (response.success && response.data) {
+      if (response.access_token) {
         toast.success('Registration successful!')
         // Store token and redirect to questionnaire
-        localStorage.setItem('token', (response.data as any).access_token)
+        localStorage.setItem('token', response.access_token)
         router.push('/questionnaire')
       } else {
-        toast.error(response.error || 'Registration failed')
+        toast.error('Registration failed')
       }
     } catch (error) {
       console.error('Registration error:', error)
-      toast.error('Network error. Please try again.')
+      
+      // Extract error message
+      let errorMessage = 'Registration failed. Please try again.'
+      if (error instanceof Error) {
+        if (error.message.includes('Validation error:')) {
+          errorMessage = error.message.replace('Validation error: ', '')
+        } else if (error.message.includes('HTTP error! status: 422')) {
+          errorMessage = 'Please check your input and try again.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -229,6 +242,9 @@ export default function RegisterPage() {
                     minLength={8}
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Password must be at least 8 characters with uppercase, lowercase, and number
+                </p>
               </div>
 
               {/* Confirm Password */}

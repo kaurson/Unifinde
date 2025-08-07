@@ -24,3 +24,58 @@
 2025-08-07 01:31:35,374 - INFO - ✅ Results saved to: output/university_data_collection_20250807_013135.json
 2025-08-07 01:31:35,374 - INFO - Results saved to: output/university_data_collection_20250807_013135.json
 2025-08-07 01:31:35,374 - INFO - ✅ All collections completed successfully!
+2025-08-07 01:38:47,901 - INFO - Found 1 universities to process
+2025-08-07 01:38:47,901 - INFO - Universities: California Institute of Technology
+2025-08-07 01:38:47,983 - INFO - Starting data collection for: California Institute of Technology
+2025-08-07 01:41:07,329 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-08-07 01:41:07,452 - INFO - ✅ Successfully collected data for California Institute of Technology
+2025-08-07 01:41:07,452 - INFO -    Confidence Score: 1.00
+2025-08-07 01:41:07,452 - INFO -    Collection ID: None
+2025-08-07 01:41:07,452 - INFO -    Source URLs: 24
+2025-08-07 01:41:07,452 - INFO -    Name: California Institute of Technology
+2025-08-07 01:41:07,452 - INFO -    Website: https://www.caltech.edu/
+2025-08-07 01:41:07,452 - INFO -    Location: Pasadena, California
+2025-08-07 01:41:07,452 - INFO -    Student Population: 2235
+2025-08-07 01:41:07,452 - INFO -    Acceptance Rate: 0.06
+2025-08-07 01:41:07,452 - INFO -    Programs Found: 2
+2025-08-07 01:41:07,452 - INFO - 
+============================================================
+2025-08-07 01:41:07,452 - INFO - COLLECTION SUMMARY
+2025-08-07 01:41:07,452 - INFO - ============================================================
+2025-08-07 01:41:07,452 - INFO - Total Universities: 1
+2025-08-07 01:41:07,452 - INFO - Successful: 1
+2025-08-07 01:41:07,452 - INFO - Failed: 0
+2025-08-07 01:41:07,452 - INFO - Success Rate: 100.0%
+2025-08-07 01:41:07,452 - INFO - Average Confidence Score: 1.00
+2025-08-07 01:41:07,453 - INFO - ✅ Results saved to: output/university_data_collection_20250807_014107.json
+2025-08-07 01:41:07,453 - INFO - Results saved to: output/university_data_collection_20250807_014107.json
+2025-08-07 01:41:07,453 - INFO - ✅ All collections completed successfully!
+2025-08-07 02:09:49,186 - INFO - Found 1 universities to process
+2025-08-07 02:09:49,187 - INFO - Universities: California Institute of Technology
+2025-08-07 02:09:49,267 - INFO - Starting data collection for: California Institute of Technology
+2025-08-07 02:11:19,653 - INFO - Found 1 universities to process
+2025-08-07 02:11:19,653 - INFO - Universities: University of California, Berkeley
+2025-08-07 02:11:19,730 - INFO - Starting data collection for: University of California, Berkeley
+2025-08-07 02:13:16,182 - INFO - HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+2025-08-07 02:13:16,309 - INFO - ✅ Successfully collected data for University of California, Berkeley
+2025-08-07 02:13:16,309 - INFO -    Confidence Score: 1.00
+2025-08-07 02:13:16,309 - INFO -    Collection ID: None
+2025-08-07 02:13:16,309 - INFO -    Source URLs: 24
+2025-08-07 02:13:16,309 - INFO -    Name: University of California, Berkeley
+2025-08-07 02:13:16,309 - INFO -    Website: https://www.berkeley.edu/
+2025-08-07 02:13:16,309 - INFO -    Location: Berkeley, California
+2025-08-07 02:13:16,309 - INFO -    Student Population: 43186
+2025-08-07 02:13:16,309 - INFO -    Acceptance Rate: 0.17
+2025-08-07 02:13:16,309 - INFO -    Programs Found: 2
+2025-08-07 02:13:16,310 - INFO - 
+============================================================
+2025-08-07 02:13:16,310 - INFO - COLLECTION SUMMARY
+2025-08-07 02:13:16,310 - INFO - ============================================================
+2025-08-07 02:13:16,310 - INFO - Total Universities: 1
+2025-08-07 02:13:16,310 - INFO - Successful: 1
+2025-08-07 02:13:16,310 - INFO - Failed: 0
+2025-08-07 02:13:16,310 - INFO - Success Rate: 100.0%
+2025-08-07 02:13:16,310 - INFO - Average Confidence Score: 1.00
+2025-08-07 02:13:16,311 - INFO - ✅ Results saved to: output/university_data_collection_20250807_021316.json
+2025-08-07 02:13:16,311 - INFO - Results saved to: output/university_data_collection_20250807_021316.json
+2025-08-07 02:13:16,311 - INFO - ✅ All collections completed successfully!

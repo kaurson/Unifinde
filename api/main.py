@@ -16,21 +16,27 @@ load_dotenv()
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.models import Base, User, University, School, Program, UserMatch, UniversityMatch
+from database.models import Base as DatabaseBase, User, UniversityDataCollectionResult
+from app.models import Base as AppBase, University, Program, Facility
 from database.database import get_db, engine
 from api.schemas import (
     UserCreate, UserLogin, UserProfile, UserUpdate, AuthResponse,
-    UniversityResponse, SchoolResponse, ProgramResponse,
-    MatchResponse, QuestionnaireResponse, PersonalityProfile
+    UniversityResponse, ProgramResponse,
+    QuestionnaireResponse, PersonalityProfile
 )
 from api.auth import get_current_user, create_access_token
-from api.matching import MatchingService
+# from api.matching import MatchingService
 from api.questionnaire import QuestionnaireService
-from api.school_scraper import SchoolScraperService
-from api.university_data_collection import router as university_data_router
+# from api.school_scraper import SchoolScraperService
+# from api.university_data_collection import router as university_data_router
 
 # Create database tables
-Base.metadata.create_all(bind=engine)
+from database.models import Base as DatabaseBase
+from app.models import Base as AppBase
+
+# Create all tables from both model files
+DatabaseBase.metadata.create_all(bind=engine)
+AppBase.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="University Matching App",
@@ -59,7 +65,7 @@ app.add_middleware(
 security = HTTPBearer()
 
 # Include routers
-app.include_router(university_data_router)
+# app.include_router(university_data_router)
 
 @app.get("/")
 async def root():
@@ -215,175 +221,259 @@ async def get_universities(
     db: Session = Depends(get_db)
 ):
     """Get universities with optional filtering"""
-    query = db.query(University)
-    
-    if country:
-        query = query.filter(University.country == country)
-    
-    if field:
-        query = query.join(Program).filter(Program.field == field)
-    
-    universities = query.offset(skip).limit(limit).all()
-    return [university.to_dict() for university in universities]
+    try:
+        query = db.query(UniversityDataCollectionResult)
+        
+        if country:
+            query = query.filter(UniversityDataCollectionResult.country == country)
+        
+        universities = query.offset(skip).limit(limit).all()
+        
+        # Convert UniversityDataCollectionResult to UniversityResponse format
+        result = []
+        for uni in universities:
+            # Create university response object
+            university_response = {
+                "id": uni.id,
+                "name": uni.name or "",
+                "website": uni.website,
+                "country": uni.country,
+                "city": uni.city,
+                "state": uni.state,
+                "phone": uni.phone,
+                "email": uni.email,
+                "founded_year": uni.founded_year,
+                "type": uni.type,
+                "student_population": uni.student_population,
+                "faculty_count": uni.faculty_count,
+                "acceptance_rate": uni.acceptance_rate,
+                "tuition_domestic": uni.tuition_domestic,
+                "tuition_international": uni.tuition_international,
+                "world_ranking": uni.world_ranking,
+                "national_ranking": uni.national_ranking,
+                "description": uni.description,
+                "mission_statement": uni.mission_statement,
+                "vision_statement": uni.vision_statement,
+                "scraped_at": uni.created_at.isoformat() if uni.created_at else None,
+                "last_updated": None,  # Skip this field for now to avoid datetime parsing issues
+                "source_url": uni.source_urls,
+                "confidence_score": uni.confidence_score,
+                "programs": [],  # Simplified for now
+                "facilities": []
+            }
+            result.append(university_response)
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in get_universities: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 @app.get("/universities/{university_id}", response_model=UniversityResponse)
 async def get_university(university_id: int, db: Session = Depends(get_db)):
     """Get specific university"""
-    university = db.query(University).filter(University.id == university_id).first()
-    
-    if not university:
+    try:
+        university = db.query(UniversityDataCollectionResult).filter(UniversityDataCollectionResult.id == university_id).first()
+        
+        if not university:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="University not found"
+            )
+        
+        # Create university response object
+        university_response = {
+            "id": university.id,
+            "name": university.name or "",
+            "website": university.website,
+            "country": university.country,
+            "city": university.city,
+            "state": university.state,
+            "phone": university.phone,
+            "email": university.email,
+            "founded_year": university.founded_year,
+            "type": university.type,
+            "student_population": university.student_population,
+            "faculty_count": university.faculty_count,
+            "acceptance_rate": university.acceptance_rate,
+            "tuition_domestic": university.tuition_domestic,
+            "tuition_international": university.tuition_international,
+            "world_ranking": university.world_ranking,
+            "national_ranking": university.national_ranking,
+            "description": university.description,
+            "mission_statement": university.mission_statement,
+            "vision_statement": university.vision_statement,
+            "scraped_at": university.created_at.isoformat() if university.created_at else None,
+            "last_updated": None,  # Skip this field for now to avoid datetime parsing issues
+            "source_url": university.source_urls,
+            "confidence_score": university.confidence_score,
+            "programs": [],  # Simplified for now
+            "facilities": []
+        }
+        
+        return university_response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_university: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="University not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}"
         )
-    
-    return university.to_dict()
 
 # School endpoints
-@app.get("/schools", response_model=List[SchoolResponse])
-async def get_schools(
-    skip: int = 0,
-    limit: int = 100,
-    country: Optional[str] = None,
-    state: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """Get schools with optional filtering"""
-    query = db.query(School)
+# @app.get("/schools", response_model=List[SchoolResponse])
+# async def get_schools(
+#     skip: int = 0,
+#     limit: int = 100,
+#     country: Optional[str] = None,
+#     state: Optional[str] = None,
+#     db: Session = Depends(get_db)
+# ):
+#     """Get schools with optional filtering"""
+#     query = db.query(School)
     
-    if country:
-        query = query.filter(School.country == country)
+#     if country:
+#         query = query.filter(School.country == country)
     
-    if state:
-        query = query.filter(School.state == state)
+#     if state:
+#         query = query.filter(School.state == state)
     
-    schools = query.offset(skip).limit(limit).all()
-    return [school.to_dict() for school in schools]
+#     schools = query.offset(skip).limit(limit).all()
+#     return [school.to_dict() for school in schools]
 
-@app.post("/schools/scrape")
-async def scrape_school_data(
-    school_name: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Scrape school data using browser automation"""
-    scraper_service = SchoolScraperService()
+# @app.post("/schools/scrape")
+# async def scrape_school_data(
+#     school_name: str,
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
+#     """Scrape school data using browser automation"""
+#     scraper_service = SchoolScraperService()
     
-    try:
-        school_data = await scraper_service.scrape_school(school_name)
+#     try:
+#         school_data = await scraper_service.scrape_school(school_name)
         
-        # Save to database
-        school = School(**school_data)
-        db.add(school)
-        db.commit()
-        db.refresh(school)
+#         # Save to database
+#         school = School(**school_data)
+#         db.add(school)
+#         db.commit()
+#         db.refresh(school)
         
-        return {"message": "School data scraped successfully", "school": school.to_dict()}
+#         return {"message": "School data scraped successfully", "school": school.to_dict()}
     
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to scrape school data: {str(e)}"
-        )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"Failed to scrape school data: {str(e)}"
+#         )
 
 # Matching endpoints
-@app.post("/matches/generate")
-async def generate_matches(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Generate matches for current user"""
-    if not current_user.personality_profile:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please complete the questionnaire first"
-        )
+# @app.post("/matches/generate")
+# async def generate_matches(
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
+#     """Generate matches for current user"""
+#     if not current_user.personality_profile:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail="Please complete the questionnaire first"
+#         )
     
-    matching_service = MatchingService()
+#     matching_service = MatchingService()
     
-    try:
-        matches = await matching_service.generate_matches(current_user, db)
+#     try:
+#         matches = await matching_service.generate_matches(current_user, db)
         
-        # Save matches to database
-        for match_data in matches:
-            match = UserMatch(
-                user_id=current_user.id,
-                university_id=match_data["university_id"],
-                program_id=match_data.get("program_id"),
-                overall_score=match_data["overall_score"],
-                academic_fit_score=match_data.get("academic_fit_score"),
-                financial_fit_score=match_data.get("financial_fit_score"),
-                location_fit_score=match_data.get("location_fit_score"),
-                personality_fit_score=match_data.get("personality_fit_score"),
-                user_preferences=match_data.get("user_preferences")
-            )
-            db.add(match)
+#         # Save matches to database
+#         for match_data in matches:
+#             match = UserMatch(
+#                 user_id=current_user.id,
+#                 university_id=match_data["university_id"],
+#                 program_id=match_data.get("program_id"),
+#                 overall_score=match_data["overall_score"],
+#                 academic_fit_score=match_data.get("academic_fit_score"),
+#                 financial_fit_score=match_data.get("financial_fit_score"),
+#                 location_fit_score=match_data.get("location_fit_score"),
+#                 personality_fit_score=match_data.get("personality_fit_score"),
+#                 user_preferences=match_data.get("user_preferences")
+#             )
+#             db.add(match)
         
-        db.commit()
+#         db.commit()
         
-        return {"message": f"Generated {len(matches)} matches", "matches": matches}
+#         return {"message": f"Generated {len(matches)} matches", "matches": matches}
     
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate matches: {str(e)}"
-        )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"Failed to generate matches: {str(e)}"
+#         )
 
-@app.get("/matches", response_model=List[MatchResponse])
-async def get_user_matches(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get user's matches"""
-    matches = db.query(UserMatch).filter(UserMatch.user_id == current_user.id).all()
-    return [match.to_dict() for match in matches]
+# @app.get("/matches", response_model=List[MatchResponse])
+# async def get_user_matches(
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
+#     """Get user's matches"""
+#     matches = db.query(UserMatch).filter(UserMatch.user_id == current_user.id).all()
+#     return [match.to_dict() for match in matches]
 
-@app.put("/matches/{match_id}/favorite")
-async def toggle_favorite(
-    match_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Toggle favorite status for a match"""
-    match = db.query(UserMatch).filter(
-        UserMatch.id == match_id,
-        UserMatch.user_id == current_user.id
-    ).first()
+# @app.put("/matches/{match_id}/favorite")
+# async def toggle_favorite(
+#     match_id: int,
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
+#     """Toggle favorite status for a match"""
+#     match = db.query(UserMatch).filter(
+#         UserMatch.id == match_id,
+#         UserMatch.user_id == current_user.id
+#     ).first()
     
-    if not match:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Match not found"
-        )
+#     if not match:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="Match not found"
+#         )
     
-    match.is_favorite = not match.is_favorite
-    db.commit()
+#     match.is_favorite = not match.is_favorite
+#     db.commit()
     
-    return {"message": "Favorite status updated", "is_favorite": match.is_favorite}
+#     return {"message": "Favorite status updated", "is_favorite": match.is_favorite}
 
-@app.put("/matches/{match_id}/notes")
-async def update_match_notes(
-    match_id: int,
-    notes: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Update notes for a match"""
-    match = db.query(UserMatch).filter(
-        UserMatch.id == match_id,
-        UserMatch.user_id == current_user.id
-    ).first()
+# @app.put("/matches/{match_id}/notes")
+# async def update_match_notes(
+#     match_id: int,
+#     notes: str,
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
+#     """Update notes for a match"""
+#     match = db.query(UserMatch).filter(
+#         UserMatch.id == match_id,
+#         UserMatch.user_id == current_user.id
+#     ).first()
     
-    if not match:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Match not found"
-        )
+#     if not match:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail="Match not found"
+#         )
     
-    match.notes = notes
-    db.commit()
+#     match.notes = notes
+#     db.commit()
     
-    return {"message": "Notes updated successfully"}
+#     return {"message": "Notes updated successfully"}
 
 if __name__ == "__main__":
     import uvicorn

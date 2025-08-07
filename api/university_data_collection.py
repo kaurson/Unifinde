@@ -6,7 +6,8 @@ import os
 from datetime import datetime
 
 from database.database import get_db
-from database.models import UniversityDataCollection, University, LLMAnalysisResult
+from database.models import UniversityDataCollectionResult
+from app.models import University
 from browser_tools.university_scraper import UniversityDataScraper
 
 router = APIRouter(prefix="/university-data", tags=["university-data-collection"])
@@ -36,9 +37,9 @@ async def run_university_scraper(university_name: str, db_session: Session):
     except Exception as e:
         print(f"Error in background task for {university_name}: {e}")
         # Update the data collection record with error
-        data_collection = db_session.query(UniversityDataCollection).filter(
-            UniversityDataCollection.university_name == university_name,
-            UniversityDataCollection.status == "in_progress"
+        data_collection = db_session.query(UniversityDataCollectionResult).filter(
+            UniversityDataCollectionResult.university_name == university_name,
+            UniversityDataCollectionResult.status == "in_progress"
         ).first()
         
         if data_collection:
@@ -104,9 +105,9 @@ async def collect_university_data(
     """
     try:
         # Check if data collection is already in progress
-        existing_collection = db.query(UniversityDataCollection).filter(
-            UniversityDataCollection.university_name == university_name,
-            UniversityDataCollection.status.in_(["pending", "in_progress"])
+        existing_collection = db.query(UniversityDataCollectionResult).filter(
+            UniversityDataCollectionResult.university_name == university_name,
+            UniversityDataCollectionResult.status.in_(["pending", "in_progress"])
         ).first()
         
         if existing_collection:
@@ -117,7 +118,7 @@ async def collect_university_data(
             }
         
         # Create new data collection record
-        data_collection = UniversityDataCollection(
+        data_collection = UniversityDataCollectionResult(
             university_name=university_name,
             status="pending",
             created_at=datetime.now()
@@ -146,8 +147,8 @@ async def get_collection_status(
     Get the status of a university data collection task
     """
     try:
-        collection = db.query(UniversityDataCollection).filter(
-            UniversityDataCollection.id == collection_id
+        collection = db.query(UniversityDataCollectionResult).filter(
+            UniversityDataCollectionResult.id == collection_id
         ).first()
         
         if not collection:
@@ -180,12 +181,12 @@ async def list_collections(
     List university data collections with optional filtering
     """
     try:
-        query = db.query(UniversityDataCollection)
+        query = db.query(UniversityDataCollectionResult)
         
         if status:
-            query = query.filter(UniversityDataCollection.status == status)
+            query = query.filter(UniversityDataCollectionResult.status == status)
         
-        collections = query.order_by(UniversityDataCollection.created_at.desc()).offset(offset).limit(limit).all()
+        collections = query.order_by(UniversityDataCollectionResult.created_at.desc()).offset(offset).limit(limit).all()
         
         return {
             "collections": [
@@ -214,8 +215,8 @@ async def get_collection_results(
     Get the results of a completed university data collection
     """
     try:
-        collection = db.query(UniversityDataCollection).filter(
-            UniversityDataCollection.id == collection_id
+        collection = db.query(UniversityDataCollectionResult).filter(
+            UniversityDataCollectionResult.id == collection_id
         ).first()
         
         if not collection:
@@ -268,8 +269,8 @@ async def delete_collection(
     Delete a university data collection
     """
     try:
-        collection = db.query(UniversityDataCollection).filter(
-            UniversityDataCollection.id == collection_id
+        collection = db.query(UniversityDataCollectionResult).filter(
+            UniversityDataCollectionResult.id == collection_id
         ).first()
         
         if not collection:
@@ -305,9 +306,9 @@ async def collect_multiple_universities(
         
         for university_name in university_names:
             # Check if already in progress
-            existing = db.query(UniversityDataCollection).filter(
-                UniversityDataCollection.university_name == university_name,
-                UniversityDataCollection.status.in_(["pending", "in_progress"])
+            existing = db.query(UniversityDataCollectionResult).filter(
+                UniversityDataCollectionResult.university_name == university_name,
+                UniversityDataCollectionResult.status.in_(["pending", "in_progress"])
             ).first()
             
             if existing:
@@ -319,7 +320,7 @@ async def collect_multiple_universities(
                 continue
             
             # Create new collection
-            collection = UniversityDataCollection(
+            collection = UniversityDataCollectionResult(
                 university_name=university_name,
                 status="pending"
             )

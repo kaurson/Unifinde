@@ -19,20 +19,9 @@ import {
   ExternalLink
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-
-interface University {
-  id: number
-  name: string
-  location: string
-  ranking: number
-  acceptanceRate: string
-  tuition: string
-  programs: string[]
-  matchScore: number
-  description: string
-  image?: string
-}
+import { apiService, University } from '@/lib/api'
 
 export default function UniversitiesPage() {
   const [universities, setUniversities] = useState<University[]>([])
@@ -40,75 +29,16 @@ export default function UniversitiesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [favorites, setFavorites] = useState<number[]>([])
-
-  // Mock data for demonstration
-  const mockUniversities: University[] = [
-    {
-      id: 1,
-      name: "Stanford University",
-      location: "Stanford, CA",
-      ranking: 2,
-      acceptanceRate: "4.3%",
-      tuition: "$56,169/year",
-      programs: ["Computer Science", "Engineering", "Business", "Medicine"],
-      matchScore: 95,
-      description: "Stanford University is a private research university known for its entrepreneurial spirit and innovation."
-    },
-    {
-      id: 2,
-      name: "MIT",
-      location: "Cambridge, MA",
-      ranking: 1,
-      acceptanceRate: "6.7%",
-      tuition: "$55,450/year",
-      programs: ["Engineering", "Computer Science", "Physics", "Mathematics"],
-      matchScore: 92,
-      description: "Massachusetts Institute of Technology is a world-renowned institution for science and technology."
-    },
-    {
-      id: 3,
-      name: "Harvard University",
-      location: "Cambridge, MA",
-      ranking: 3,
-      acceptanceRate: "4.6%",
-      tuition: "$54,768/year",
-      programs: ["Law", "Medicine", "Business", "Arts & Sciences"],
-      matchScore: 88,
-      description: "Harvard University is America's oldest institution of higher learning and a world leader in research."
-    },
-    {
-      id: 4,
-      name: "University of California, Berkeley",
-      location: "Berkeley, CA",
-      ranking: 22,
-      acceptanceRate: "14.8%",
-      tuition: "$44,008/year",
-      programs: ["Engineering", "Computer Science", "Business", "Environmental Science"],
-      matchScore: 85,
-      description: "UC Berkeley is a top-ranked public university known for its research and social activism."
-    },
-    {
-      id: 5,
-      name: "Carnegie Mellon University",
-      location: "Pittsburgh, PA",
-      ranking: 22,
-      acceptanceRate: "15.4%",
-      tuition: "$58,924/year",
-      programs: ["Computer Science", "Engineering", "Arts", "Business"],
-      matchScore: 82,
-      description: "Carnegie Mellon is known for its world-class programs in computer science and the arts."
-    }
-  ]
+  const router = useRouter()
 
   useEffect(() => {
-    // Simulate loading data
+    // Load universities from API
     const loadUniversities = async () => {
       setIsLoading(true)
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        setUniversities(mockUniversities)
-        setFilteredUniversities(mockUniversities)
+        const data = await apiService.getUniversities()
+        setUniversities(data)
+        setFilteredUniversities(data)
         toast.success('University matches loaded successfully!')
       } catch (error) {
         console.error('Error loading universities:', error)
@@ -125,10 +55,13 @@ export default function UniversitiesPage() {
     // Filter universities based on search query
     const filtered = universities.filter(uni =>
       uni.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      uni.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      uni.programs.some(program => 
-        program.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      (uni.city && uni.city.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (uni.state && uni.state.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (uni.country && uni.country.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (uni.programs && uni.programs.some(program => 
+        program.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (program.field && program.field.toLowerCase().includes(searchQuery.toLowerCase()))
+      ))
     )
     setFilteredUniversities(filtered)
   }, [searchQuery, universities])
@@ -141,11 +74,35 @@ export default function UniversitiesPage() {
     )
   }
 
+  const handleUniversityClick = (universityId: number) => {
+    router.push(`/universities/${universityId}`)
+  }
+
   const getMatchScoreColor = (score: number) => {
     if (score >= 90) return 'bg-green-100 text-green-800'
     if (score >= 80) return 'bg-blue-100 text-blue-800'
     if (score >= 70) return 'bg-yellow-100 text-yellow-800'
     return 'bg-gray-100 text-gray-800'
+  }
+
+  const formatLocation = (university: University) => {
+    const parts = [university.city, university.state, university.country].filter(Boolean)
+    return parts.join(', ')
+  }
+
+  const formatTuition = (university: University) => {
+    if (university.tuition_domestic) {
+      return `$${university.tuition_domestic.toLocaleString()}/year`
+    }
+    if (university.tuition_international) {
+      return `$${university.tuition_international.toLocaleString()}/year`
+    }
+    return 'Tuition not available'
+  }
+
+  const formatAcceptanceRate = (rate: number | undefined) => {
+    if (rate === undefined || rate === null) return 'Not available'
+    return `${rate.toFixed(1)}%`
   }
 
   if (isLoading) {
@@ -224,28 +181,39 @@ export default function UniversitiesPage() {
         {/* Universities Grid */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredUniversities.map((university) => (
-            <Card key={university.id} className="hover:shadow-lg transition-shadow">
+            <Card 
+              key={university.id} 
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => handleUniversityClick(university.id)}
+            >
               <CardHeader className="pb-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <CardTitle className="text-lg mb-2">{university.name}</CardTitle>
                     <div className="flex items-center text-sm text-muted-foreground mb-2">
                       <MapPin className="h-4 w-4 mr-1" />
-                      {university.location}
+                      {formatLocation(university)}
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Badge variant="outline" className="text-xs">
-                        #{university.ranking} Ranking
-                      </Badge>
-                      <Badge className={`text-xs ${getMatchScoreColor(university.matchScore)}`}>
-                        {university.matchScore}% Match
-                      </Badge>
+                      {university.world_ranking && (
+                        <Badge variant="outline" className="text-xs">
+                          #{university.world_ranking} World Ranking
+                        </Badge>
+                      )}
+                      {university.national_ranking && (
+                        <Badge variant="outline" className="text-xs">
+                          #{university.national_ranking} National Ranking
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => toggleFavorite(university.id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleFavorite(university.id)
+                    }}
                     className={`p-1 h-8 w-8 ${
                       favorites.includes(university.id) ? 'text-red-500' : 'text-muted-foreground'
                     }`}
@@ -259,18 +227,24 @@ export default function UniversitiesPage() {
               
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  {university.description}
+                  {university.description || 'No description available'}
                 </p>
                 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Acceptance Rate:</span>
-                    <span className="font-medium">{university.acceptanceRate}</span>
+                    <span className="font-medium">{formatAcceptanceRate(university.acceptance_rate)}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Tuition:</span>
-                    <span className="font-medium">{university.tuition}</span>
+                    <span className="font-medium">{formatTuition(university)}</span>
                   </div>
+                  {university.student_population && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Students:</span>
+                      <span className="font-medium">{university.student_population.toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
 
                 <Separator />
@@ -278,14 +252,19 @@ export default function UniversitiesPage() {
                 <div>
                   <h4 className="text-sm font-medium mb-2">Top Programs:</h4>
                   <div className="flex flex-wrap gap-1">
-                    {university.programs.slice(0, 3).map((program, index) => (
+                    {university.programs && university.programs.slice(0, 3).map((program, index) => (
                       <Badge key={index} variant="secondary" className="text-xs">
-                        {program}
+                        {program.name}
                       </Badge>
                     ))}
-                    {university.programs.length > 3 && (
+                    {university.programs && university.programs.length > 3 && (
                       <Badge variant="secondary" className="text-xs">
                         +{university.programs.length - 3} more
+                      </Badge>
+                    )}
+                    {(!university.programs || university.programs.length === 0) && (
+                      <Badge variant="secondary" className="text-xs">
+                        Programs not available
                       </Badge>
                     )}
                   </div>

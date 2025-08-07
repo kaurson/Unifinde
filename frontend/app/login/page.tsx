@@ -33,21 +33,32 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await login({
-        email: formData.email,
-        password: formData.password
-      })
+      const response = await login(formData.email, formData.password)
 
-      if (response.success && response.data) {
+      if (response.access_token) {
         toast.success('Login successful!')
         // Store token and redirect to dashboard
-        localStorage.setItem('token', (response.data as any).access_token)
+        localStorage.setItem('token', response.access_token)
         router.push('/dashboard')
       } else {
-        toast.error(response.error || 'Login failed')
+        toast.error('Login failed')
       }
     } catch (error) {
-      toast.error('Network error. Please try again.')
+      console.error('Login error:', error)
+      
+      // Extract error message
+      let errorMessage = 'Login failed. Please try again.'
+      if (error instanceof Error) {
+        if (error.message.includes('Validation error:')) {
+          errorMessage = error.message.replace('Validation error: ', '')
+        } else if (error.message.includes('HTTP error! status: 401')) {
+          errorMessage = 'Incorrect email or password.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
