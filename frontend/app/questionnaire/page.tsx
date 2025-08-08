@@ -4,202 +4,188 @@ import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, ArrowRight, Brain, Loader2 } from 'lucide-react'
+import { QuestionComponent } from '@/components/questionnaire/QuestionComponents'
+import { ArrowLeft, ArrowRight, CheckCircle, Brain, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { api, Question, UserAnswer } from '@/lib/api'
-import { QuestionComponent } from '@/components/questionnaire/QuestionComponents'
+import { api, Question } from '@/lib/api'
 
 export default function QuestionnairePage() {
   const router = useRouter()
   const [questions, setQuestions] = useState<Question[]>([])
   const [currentQuestion, setCurrentQuestion] = useState(0)
-  const [answers, setAnswers] = useState<{ [key: string]: any }>({})
+  const [answers, setAnswers] = useState<Record<string, any>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
-
-  // Check authentication on component mount
-  useEffect(() => {
-    const checkAuth = () => {
-      const auth = api.isAuthenticated()
-      setIsAuthenticated(auth)
-      
-      if (!auth) {
-        toast.error('Please login to take the questionnaire')
-        router.push('/login')
-        return
-      }
-    }
-
-    checkAuth()
-  }, [router])
 
   // Fetch questions from database
   useEffect(() => {
-    const fetchQuestions = async () => {
-      if (isAuthenticated === null) return // Wait for auth check
+    const checkAuthAndLoadQuestions = async () => {
+      setIsLoading(true)
       
       try {
-        const fetchedQuestions = await api.getQuestions()
-        setQuestions(fetchedQuestions.sort((a, b) => a.order_index - b.order_index))
+        // Check authentication using the new cookie-based system
+        const isAuth = await api.isAuthenticated()
+        if (!isAuth) {
+          toast.error('Please login to access the questionnaire')
+          router.push('/login')
+          return
+        }
+        
+        // Load questions
+        const questionsData = await api.getQuestions()
+        setQuestions(questionsData.sort((a, b) => a.order_index - b.order_index))
       } catch (error) {
-        console.error('Error fetching questions:', error)
-        toast.error('Failed to load questions. Please try again.')
+        console.error('Error loading questions:', error)
+        toast.error('Failed to load questions')
       } finally {
         setIsLoading(false)
       }
     }
 
-    // Only fetch questions if user is authenticated
-    if (isAuthenticated) {
-      fetchQuestions()
-    }
-  }, [isAuthenticated])
+    checkAuthAndLoadQuestions()
+  }, [router])
 
   const handleAnswer = (answer: any) => {
-    const currentQ = questions[currentQuestion]
-    if (currentQ) {
+    const questionId = questions[currentQuestion]?.id
+    if (questionId) {
       setAnswers(prev => ({
         ...prev,
-        [currentQ.id]: answer
+        [questionId]: answer
       }))
     }
   }
 
-  const handleNext = async () => {
-    const currentQ = questions[currentQuestion]
-    if (!currentQ) return
-
-    if (answers[currentQ.id] === null || answers[currentQ.id] === undefined || answers[currentQ.id] === '') {
-      toast.error('Please answer the question before continuing')
-      return
-    }
-
-    if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion(prev => prev + 1)
+  const handleNext = () => {
+    const questionId = questions[currentQuestion]?.id
+    if (questionId && answers[questionId]) {
+      if (currentQuestion < questions.length - 1) {
+        setCurrentQuestion(prev => prev + 1)
+      }
     } else {
-      // Submit questionnaire and redirect to universities
-      await handleSubmit()
+      toast.error('Please answer the current question before proceeding')
+    }
+  }
+
+  const handlePrevious = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion(prev => prev - 1)
     }
   }
 
   const handleSubmit = async () => {
-    // Check authentication before submitting
-    if (!api.isAuthenticated()) {
-      toast.error('Please login to submit the questionnaire')
-      router.push('/login')
+    const questionId = questions[currentQuestion]?.id
+    if (questionId && !answers[questionId]) {
+      toast.error('Please answer the current question before submitting')
       return
     }
 
     setIsSubmitting(true)
     
     try {
+      // Check authentication before submitting
+      const isAuth = await api.isAuthenticated()
+      if (!isAuth) {
+        toast.error('Please login to submit the questionnaire')
+        router.push('/login')
+        return
+      }
+
+      console.log('Submitting questionnaire with answers:', answers)
+
       // Convert answers to the format expected by the API
-      const answerData: UserAnswer[] = Object.entries(answers).map(([questionId, answer]) => ({
-        question_id: questionId,
-        answer_text: String(answer),
+      const submissionAnswers = Object.entries(answers).map(([question_id, answer]) => ({
+        question_id,
+        answer_text: typeof answer === 'string' ? answer : JSON.stringify(answer),
         answer_data: { value: answer }
       }))
 
       const submissionData = {
-        answers: answerData,
-        preferred_majors: [],
-        preferred_locations: []
+        answers: submissionAnswers,
+        preferred_majors: ['Computer Science', 'Engineering'], // Default values
+        preferred_locations: ['United States', 'Canada'] // Default values
       }
 
-      console.log('Submitting questionnaire:', submissionData)
+      console.log('Submitting data:', submissionData)
+
+      const result = await api.submitQuestionnaire(submissionData)
+      console.log('Questionnaire submission result:', result)
       
-      // Submit to API
-      await api.submitQuestionnaire(submissionData)
-      
-      // Get current user profile to get the ID
-      const userProfile = await api.getProfile()
+      const userProfile = await api.getProfile() // Get current user profile to get the ID
+      console.log('User profile after submission:', userProfile)
       
       toast.success('Questionnaire completed! Redirecting to your summary...')
-      
-      // Redirect to summary page
-      router.push(`/summary/${userProfile.id}`)
+      router.push(`/summary/${userProfile.id}`) // Redirect to summary page
     } catch (error) {
       console.error('Error submitting questionnaire:', error)
-      toast.error('Failed to submit questionnaire. Please try again.')
+      if (error instanceof Error) {
+        toast.error(`Failed to submit questionnaire: ${error.message}`)
+      } else {
+        toast.error('Failed to submit questionnaire. Please try again.')
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const handleSkipQuestionnaire = async () => {
-    // Check authentication before submitting
-    if (!api.isAuthenticated()) {
-      toast.error('Please login to submit the questionnaire')
-      router.push('/login')
-      return
-    }
-
     setIsSubmitting(true)
     
     try {
-      // Get actual questions from database to use real IDs
-      const actualQuestions = await api.getQuestions()
-      const sortedQuestions = actualQuestions.sort((a, b) => a.order_index - b.order_index)
+      // Check authentication before submitting
+      const isAuth = await api.isAuthenticated()
+      if (!isAuth) {
+        toast.error('Please login to submit the questionnaire')
+        router.push('/login')
+        return
+      }
+
+      // Get actual questions to generate proper sample answers
+      const questionsData = await api.getQuestions()
       
-      // Sample data for testing using real question IDs
-      const sampleAnswers: UserAnswer[] = sortedQuestions.map((question, index) => {
-        // Generate appropriate sample answers based on question type
-        let sampleAnswer: any = ''
-        
+      // Generate sample answers based on question types
+      const sampleAnswers = questionsData.map(question => {
+        let sampleAnswer = ''
         switch (question.question_type) {
           case 'boolean':
-            sampleAnswer = index % 2 === 0 ? true : false
-            break
-          case 'text':
-            sampleAnswer = `Sample answer for question ${index + 1}: I am interested in learning and personal growth.`
+            sampleAnswer = Math.random() > 0.5 ? 'true' : 'false'
             break
           case 'integer':
-            sampleAnswer = Math.floor(Math.random() * 10) + 1
+            sampleAnswer = Math.floor(Math.random() * 10).toString()
             break
           case 'float':
-            sampleAnswer = (Math.random() * 10).toFixed(1)
+            sampleAnswer = (Math.random() * 10).toFixed(2)
             break
           case 'scale_0_10':
-            sampleAnswer = Math.floor(Math.random() * 11)
+            sampleAnswer = Math.floor(Math.random() * 11).toString()
             break
           case 'multiple_choice_3':
-            sampleAnswer = ['breakfast', 'lunch', 'midnight snack'][index % 3]
+            sampleAnswer = ['Option A', 'Option B', 'Option C'][Math.floor(Math.random() * 3)]
             break
           case 'multiple_choice_5':
-            sampleAnswer = ['Take turns chewing it', 'chew it together at the same time', 'take it yourself', 'throw it away (no one deserves it)', 'Give it to your friend'][index % 5]
+            sampleAnswer = ['Option A', 'Option B', 'Option C', 'Option D', 'Option E'][Math.floor(Math.random() * 5)]
             break
           default:
-            sampleAnswer = `Sample answer for question ${index + 1}`
+            sampleAnswer = 'Sample answer for testing purposes'
         }
-        
         return {
           question_id: question.id,
-          answer_text: String(sampleAnswer),
+          answer_text: sampleAnswer,
           answer_data: { value: sampleAnswer }
         }
       })
 
       const submissionData = {
         answers: sampleAnswers,
-        preferred_majors: ["Computer Science", "Engineering", "Data Science"],
-        preferred_locations: ["United States", "Canada", "United Kingdom"]
+        preferred_majors: ['Computer Science', 'Engineering', 'Business'],
+        preferred_locations: ['United States', 'Canada', 'United Kingdom']
       }
 
-      console.log('Submitting sample questionnaire data:', submissionData)
-      
-      // Submit to API
       await api.submitQuestionnaire(submissionData)
-      
-      // Get current user profile to get the ID
-      const userProfile = await api.getProfile()
-      
+      const userProfile = await api.getProfile() // Get current user profile to get the ID
       toast.success('Sample questionnaire submitted! Redirecting to your summary...')
-      
-      // Redirect to summary page
-      router.push(`/summary/${userProfile.id}`)
+      router.push(`/summary/${userProfile.id}`) // Redirect to summary page
     } catch (error) {
       console.error('Error submitting sample questionnaire:', error)
       toast.error('Failed to submit sample questionnaire. Please try again.')
@@ -209,31 +195,6 @@ export default function QuestionnairePage() {
   }
 
   // Show loading while checking authentication
-  if (isAuthenticated === null) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-lg">Checking authentication...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Don't render anything if not authenticated
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-        <div className="text-center">
-          <p className="text-lg mb-4">Please login to access the questionnaire.</p>
-          <Link href="/login" className="text-primary hover:underline">
-            Go to Login
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
@@ -352,7 +313,7 @@ export default function QuestionnairePage() {
             <div className="flex justify-between items-center">
               <Button
                 variant="outline"
-                onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))}
+                onClick={handlePrevious}
                 disabled={currentQuestion === 0}
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
@@ -360,7 +321,7 @@ export default function QuestionnairePage() {
               </Button>
 
               <Button
-                onClick={handleNext}
+                onClick={currentQuestion === questions.length - 1 ? handleSubmit : handleNext}
                 disabled={!hasAnswered || isSubmitting}
                 className="min-w-[120px]"
               >

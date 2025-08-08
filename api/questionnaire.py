@@ -11,6 +11,37 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database.models import User
 from database.database import get_db
 
+# Import the matching prompt
+MATCHING_PROMPT = """
+You are a psychologist and counselor with 20+ years of experience helping tens of thousands of students find their career path and plan out their educational journey after high school. You ask the same 23 questions of everyone, and based on their answers, you will conduct a thorough analysis of their profile. The importance, weight of all questions and answers are equal when conducting the analysis. First, give a quick personality snapshot. Then give the top 3 most suitable university types with qualities for the profile. Provide a reason why each of these university types with these qualities is on the list, based on the profile's answers, and why in that order. Then give the profile, based on the questionnaire answers, ranging from 1, the best, to 10, a list of countries the profile is most suitable for studying in. Provide a reason why each of these countries is on the list, based on the profile's answers, and why in that order. Then give notes, insights about what campus and environment are most suitable for the profile. The information should be: climate, campus type, size physically + student body, student life, sports, financial aid/ scholarships, location like city + size, university type, world ranking, and majors' rankings in the world.
+This is the questionnaire:
+Would you rather marry Stephen Hawking or a short shelf-life chocolate cake?
+Who is/was your childhood celebrity crush?
+Do you put bread in the fridge or the cabinet? 
+Has evolution changed your life?
+Do you thank ChatGPT? Why?
+Your most unpopular opinion.	
+What is the acceptable height of a sock starting from the ankle? 
+Beans? breakfast / lunch / midnight snack
+Why did the chicken come before the egg?
+Why did the egg come before the chicken?
+Diving into the Mariana Trench or climbing Mount Everest?
+How many people do you need to steal a car? 0 - 10
+Who's your favourite villain?
+One piece of gum left, and your friend asks for one? Take turns chewing it / chew it together at the same time / take it yourself / throw it away (no one deserves it) / Give it to your friend
+Would you rather have the professors send you streak snaps or them never even knowing your name?
+How many "in one" does your shampoo have?
+In what order do you dry yourself after a shower?
+The Trolley problem.  A trolley is heading toward 5 people. You can pull a lever to divert it, but it will hit your grandma, who's going to die soon anyway. Do you pull the lever?
+Would you rather be a boulder or a grain of sand?
+Cereal or milk first?
+Best Ice Cream flavour?
+Would you rather live in an apartment but on the first floor, or in a house but only in the attic? 
+Favorite internet trend?
+
+Note: Question 12 tells whether the profile is a team person or solo. Question 15 tells whether the profile likes a big student body or a small one. Question 19 tells whether the profile likes to have more presence and live in an environment where one can be more noticeable, or be a grain of sand that wants to be part of a big world but play a small role, be a small part of it. Question 22 tells whether you would like to live in a smaller space but see more, rather than live in a bigger space but not see, experience as much. It also tells whether having more material value balances the inability to enjoy your environment as much, or giving up more on the material value to experience more.
+"""
+
 class QuestionnaireService:
     def __init__(self):
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -19,13 +50,13 @@ class QuestionnaireService:
         self, 
         questionnaire_response
     ) -> Dict[str, Any]:
-        """Generate personality profile using LLM"""
+        """Generate personality profile using the matching prompt"""
         
         # Extract answers and preferred majors from the questionnaire response
         answers = questionnaire_response.answers
         preferred_majors = questionnaire_response.preferred_majors or []
         
-        prompt = self._create_personality_prompt(answers, preferred_majors)
+        prompt = self._create_matching_prompt(answers, preferred_majors)
         
         try:
             response = self.client.chat.completions.create(
@@ -33,7 +64,7 @@ class QuestionnaireService:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert career counselor and personality analyst. Analyze the user's responses and create a comprehensive personality profile that will help match them with suitable universities and programs."
+                        "content": MATCHING_PROMPT
                     },
                     {
                         "role": "user",
@@ -41,23 +72,31 @@ class QuestionnaireService:
                     }
                 ],
                 temperature=0.7,
-                max_tokens=1000
+                max_tokens=1500
             )
             
             # Parse the response
             profile_text = response.choices[0].message.content
             
-            # Try to extract structured data
-            try:
-                # Look for JSON-like structure in the response
-                profile_data = self._extract_profile_data(profile_text)
-            except:
-                # Fallback to basic structure
-                profile_data = self._create_basic_profile(profile_text, answers, preferred_majors)
-            
             # Generate concise summary
-            summary = await self._generate_personality_summary(profile_data, answers, preferred_majors)
-            profile_data['summary'] = summary
+            summary = await self._generate_personality_summary(profile_text, answers, preferred_majors)
+            
+            # Create structured profile data
+            profile_data = {
+                "analysis": profile_text,
+                "summary": summary,
+                "personality_type": self._extract_personality_type(profile_text),
+                "learning_style": self._extract_learning_style(profile_text),
+                "career_interests": preferred_majors,
+                "strengths": self._extract_strengths(profile_text),
+                "areas_for_development": self._extract_development_areas(profile_text),
+                "study_preferences": self._extract_study_preferences(profile_text),
+                "work_environment_preferences": self._extract_work_preferences(profile_text),
+                "communication_style": self._extract_communication_style(profile_text),
+                "leadership_style": self._extract_leadership_style(profile_text),
+                "stress_management": self._extract_stress_management(profile_text),
+                "confidence_score": 0.85
+            }
             
             return profile_data
             
@@ -70,7 +109,7 @@ class QuestionnaireService:
 
     async def _generate_personality_summary(
         self, 
-        profile_data: Dict[str, Any], 
+        profile_text: str, 
         answers: Dict[str, Any], 
         preferred_majors: List[str]
     ) -> str:
@@ -80,7 +119,7 @@ class QuestionnaireService:
         Based on the following personality profile and questionnaire responses, create a concise, engaging 2-3 sentence summary that captures the user's key personality traits, learning style, and academic interests. This summary should be written in a friendly, professional tone and highlight what makes this person unique.
 
         Personality Profile:
-        {json.dumps(profile_data, indent=2)}
+        {json.dumps(profile_text, indent=2)}
 
         Questionnaire Responses:
         {json.dumps(answers, indent=2)}
@@ -158,45 +197,76 @@ class QuestionnaireService:
         
         return f"This {personality_desc} individual thrives on {learning_style} and shows strong interest in {majors_desc}. They approach challenges with determination and are eager to find the perfect academic environment to support their growth and development."
     
-    def _create_personality_prompt(self, answers: Dict[str, Any], preferred_majors: List[str]) -> str:
-        """Create prompt for personality analysis"""
+    def _create_matching_prompt(self, answers: Dict[str, Any], preferred_majors: List[str]) -> str:
+        """Create prompt using the matching prompt format"""
+        
+        # Map the answers to the 23 questions format
+        question_mapping = {
+            "q1": "Would you rather marry Stephen Hawking or a short shelf-life chocolate cake?",
+            "q2": "Who is/was your childhood celebrity crush?",
+            "q3": "Do you put bread in the fridge or the cabinet?",
+            "q4": "Has evolution changed your life?",
+            "q5": "Do you thank ChatGPT? Why?",
+            "q6": "Your most unpopular opinion.",
+            "q7": "What is the acceptable height of a sock starting from the ankle?",
+            "q8": "Beans? breakfast / lunch / midnight snack",
+            "q9": "Why did the chicken come before the egg?",
+            "q10": "Why did the egg come before the chicken?",
+            "q11": "Diving into the Mariana Trench or climbing Mount Everest?",
+            "q12": "How many people do you need to steal a car? 0 - 10",
+            "q13": "Who's your favourite villain?",
+            "q14": "One piece of gum left, and your friend asks for one? Take turns chewing it / chew it together at the same time / take it yourself / throw it away (no one deserves it) / Give it to your friend",
+            "q15": "Would you rather have the professors send you streak snaps or them never even knowing your name?",
+            "q16": "How many \"in one\" does your shampoo have?",
+            "q17": "In what order do you dry yourself after a shower?",
+            "q18": "The Trolley problem. A trolley is heading toward 5 people. You can pull a lever to divert it, but it will hit your grandma, who's going to die soon anyway. Do you pull the lever?",
+            "q19": "Would you rather be a boulder or a grain of sand?",
+            "q20": "Cereal or milk first?",
+            "q21": "Best Ice Cream flavour?",
+            "q22": "Would you rather live in an apartment but on the first floor, or in a house but only in the attic?",
+            "q23": "Favorite internet trend?"
+        }
+        
+        # Create the answers section
+        answers_text = "Based on the questionnaire answers:\n"
+        
+        # Get the questions from the database to map them properly
+        from database.database import get_db
+        from database.models import Question
+        
+        # Get a database session
+        db = next(get_db())
+        try:
+            # Get all questions ordered by order_index
+            questions = db.query(Question).filter(Question.is_active == True).order_by(Question.order_index).all()
+            
+            # Map answers to questions by order
+            for i, question in enumerate(questions, 1):
+                if question.id in answers:
+                    answer = answers[question.id]
+                    question_text = question.question_text
+                    answers_text += f"Q{i}: {question_text}\nAnswer: {answer}\n\n"
+                else:
+                    # If no answer for this question, use a default
+                    question_text = question.question_text
+                    answers_text += f"Q{i}: {question_text}\nAnswer: No answer provided\n\n"
+        finally:
+            db.close()
+        
+        if preferred_majors:
+            answers_text += f"Preferred Majors: {', '.join(preferred_majors)}\n\n"
         
         prompt = f"""
-        Based on the following questionnaire responses and preferred majors, create a comprehensive personality profile:
+{answers_text}
 
-        Questionnaire Responses:
-        {json.dumps(answers, indent=2)}
+Please provide a comprehensive analysis following the format specified in the system prompt:
+1. Quick personality snapshot
+2. Top 3 most suitable university types with qualities
+3. List of countries (1-10 ranking) most suitable for studying
+4. Notes and insights about campus and environment preferences
 
-        Preferred Majors:
-        {', '.join(preferred_majors)}
-
-        Please analyze this information and provide a structured personality profile including:
-        1. Personality type (e.g., introvert/extrovert, analytical/creative, etc.)
-        2. Learning style preferences
-        3. Career interests and strengths
-        4. Areas for development
-        5. Study preferences
-        6. Work environment preferences
-        7. Communication style
-        8. Leadership style
-        9. Stress management approach
-        10. Confidence score (0-1)
-
-        Please format your response as a JSON object with these fields:
-        {{
-            "personality_type": "string",
-            "learning_style": "string", 
-            "career_interests": ["array of strings"],
-            "strengths": ["array of strings"],
-            "areas_for_development": ["array of strings"],
-            "study_preferences": {{"key": "value"}},
-            "work_environment_preferences": {{"key": "value"}},
-            "communication_style": "string",
-            "leadership_style": "string",
-            "stress_management": "string",
-            "confidence_score": 0.85
-        }}
-        """
+Please structure your response clearly with these sections.
+"""
         
         return prompt
     
@@ -328,3 +398,79 @@ class QuestionnaireService:
             areas = ["skill development in chosen field"]
         
         return areas 
+
+    def _extract_study_preferences(self, profile_text: str) -> Dict[str, Any]:
+        """Extract study preferences from analysis text"""
+        text_lower = profile_text.lower()
+        
+        preferences = {
+            "preferred_environment": "flexible",
+            "group_work": "mixed",
+            "online_learning": "mixed"
+        }
+        
+        if "small" in text_lower and "student" in text_lower:
+            preferences["preferred_environment"] = "small"
+        elif "large" in text_lower and "student" in text_lower:
+            preferences["preferred_environment"] = "large"
+        
+        if "team" in text_lower or "collaborative" in text_lower:
+            preferences["group_work"] = "preferred"
+        elif "individual" in text_lower or "solo" in text_lower:
+            preferences["group_work"] = "individual"
+        
+        return preferences
+
+    def _extract_work_preferences(self, profile_text: str) -> Dict[str, Any]:
+        """Extract work environment preferences from analysis text"""
+        text_lower = profile_text.lower()
+        
+        preferences = {
+            "collaboration": "moderate",
+            "structure": "moderate"
+        }
+        
+        if "team" in text_lower or "collaborative" in text_lower:
+            preferences["collaboration"] = "high"
+        elif "independent" in text_lower or "solo" in text_lower:
+            preferences["collaboration"] = "low"
+        
+        if "structured" in text_lower or "organized" in text_lower:
+            preferences["structure"] = "high"
+        elif "flexible" in text_lower or "creative" in text_lower:
+            preferences["structure"] = "low"
+        
+        return preferences
+
+    def _extract_communication_style(self, profile_text: str) -> str:
+        """Extract communication style from analysis text"""
+        text_lower = profile_text.lower()
+        
+        if "direct" in text_lower or "assertive" in text_lower:
+            return "direct"
+        elif "diplomatic" in text_lower or "empathetic" in text_lower:
+            return "diplomatic"
+        else:
+            return "balanced"
+
+    def _extract_leadership_style(self, profile_text: str) -> str:
+        """Extract leadership style from analysis text"""
+        text_lower = profile_text.lower()
+        
+        if "collaborative" in text_lower or "team" in text_lower:
+            return "collaborative"
+        elif "independent" in text_lower or "solo" in text_lower:
+            return "independent"
+        else:
+            return "situational"
+
+    def _extract_stress_management(self, profile_text: str) -> str:
+        """Extract stress management approach from analysis text"""
+        text_lower = profile_text.lower()
+        
+        if "proactive" in text_lower or "planning" in text_lower:
+            return "proactive"
+        elif "adaptive" in text_lower or "flexible" in text_lower:
+            return "adaptive"
+        else:
+            return "balanced" 

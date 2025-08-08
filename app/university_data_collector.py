@@ -17,8 +17,12 @@ import logging
 # Add the project root to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Set the correct database path when running from app directory
-os.environ['DATABASE_URL'] = 'sqlite:///../universities.db'
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv('../.env')
+
+# Remove the hardcoded SQLite database URL - let it use the environment variable
+# os.environ['DATABASE_URL'] = 'sqlite:///../universities.db'
 
 from database.database import get_db
 from browser_tools.university_scraper import UniversityDataScraper

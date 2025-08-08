@@ -12,7 +12,6 @@ load_dotenv()
 
 # Import your models to ensure they are registered with SQLAlchemy
 from database.models import Base as DatabaseBase
-from app.models import Base as AppBase
 from database.database import DATABASE_URL
 
 # this is the Alembic Config object, which provides
@@ -29,12 +28,7 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# Combine metadata from both model bases
 target_metadata = DatabaseBase.metadata
-# Add app models metadata
-for table in AppBase.metadata.tables.values():
-    if table.name not in target_metadata.tables:
-        target_metadata._add_table(table.name, table.schema, table)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

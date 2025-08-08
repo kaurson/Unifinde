@@ -1,4 +1,4 @@
-from fastapi import HTTPException, Depends, status
+from fastapi import HTTPException, Depends, status, Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import jwt
@@ -20,9 +20,11 @@ from database.database import get_db
 # JWT Configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days for better user experience
+COOKIE_NAME = "auth_token"
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"  # Set to true in production with HTTPS
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)  # Make it optional for cookie-based auth
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create JWT access token"""
@@ -47,19 +49,54 @@ def verify_token(token: str) -> Optional[str]:
     except jwt.JWTError:
         return None
 
+def set_auth_cookie(response: Response, token: str):
+    """Set HTTP-only cookie with auth token"""
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert minutes to seconds
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        path="/"
+    )
+
+def clear_auth_cookie(response: Response):
+    """Clear auth cookie"""
+    response.delete_cookie(
+        key=COOKIE_NAME,
+        path="/"
+    )
+
+def get_token_from_cookie(request: Request) -> Optional[str]:
+    """Get token from cookie"""
+    return request.cookies.get(COOKIE_NAME)
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    """Get current authenticated user"""
+    """Get current authenticated user from cookie or bearer token"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    try:
+    token = None
+    
+    # Try to get token from cookie first
+    token = get_token_from_cookie(request)
+    
+    # If no cookie token, try bearer token
+    if not token and credentials:
         token = credentials.credentials
+    
+    if not token:
+        raise credentials_exception
+    
+    try:
         email = verify_token(token)
         if email is None:
             raise credentials_exception

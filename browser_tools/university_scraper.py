@@ -11,6 +11,7 @@ from database.models import UniversityDataCollectionResult
 from database.database import get_db
 from dotenv import load_dotenv
 import os
+import re
 
 # Load environment variables
 load_dotenv()
@@ -178,6 +179,7 @@ class UniversityDataScraper:
                 # Essential Basic Information
                 f"{university_name} university official website facts statistics",
                 f"{university_name} university contact information location",
+                f"{university_name} university email address phone number contact details",
                 
                 # SUBJECT RANKINGS - COMPACT
                 f"{university_name} university rankings US News QS Times engineering business computer science",
@@ -208,9 +210,12 @@ class UniversityDataScraper:
         
         # Try multiple search strategies
         search_strategies = [
-            self._try_bing_search,  # Make Bing primary since it's more reliable
-            self._try_google_search,
-            self._try_direct_search
+            self._try_wikipedia_academic_search,  # Most reliable - Wikipedia and academic sources
+            self._try_educational_database_search,  # Educational databases and ranking sites
+            self._try_google_search,  # Google as backup
+            self._try_direct_search,  # Direct URL attempts
+            self._try_bing_search,  # Bing as last resort (having issues)
+            self._try_knowledge_based_fallback  # Final fallback using LLM knowledge
         ]
         
         for strategy in search_strategies:
@@ -294,40 +299,63 @@ class UniversityDataScraper:
                 'textarea[aria-label="Search"]'
             ]
             
-            search_box = None
-            for selector in search_selectors:
-                try:
-                    search_box = await self.page.query_selector(selector)
-                    if search_box:
-                        print(f"Found search box with selector: {selector}")
-                        break
-                except:
-                    continue
-            
-            if not search_box:
-                print("Search box not found, trying alternative approach...")
-                # Try to find any input field
-                search_box = await self.page.query_selector('input, textarea')
-            
-            if not search_box:
-                raise Exception("Could not find search input field")
-            
             # Perform searches with reduced number to avoid timeouts
-            for i, query in enumerate(search_queries[:5]):  # Reduced to first 5 queries
+            for i, query in enumerate(search_queries[:3]):  # Reduced to first 3 queries to avoid timeouts
                 print(f"Searching for: {query}")
                 
                 try:
-                    # Clear and fill search box
-                    await search_box.click()
-                    await search_box.fill("")
-                    await asyncio.sleep(1)
-                    await search_box.type(query, delay=100)  # Type with delay to seem more human
-                    await asyncio.sleep(1)
+                    # Navigate back to Google homepage for each search to avoid element detachment issues
+                    if i > 0:
+                        await self.page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=10000)
+                        await asyncio.sleep(2)
+                        
+                        # Handle consent popup again if it appears
+                        for selector in consent_selectors:
+                            try:
+                                consent_button = await self.page.query_selector(selector)
+                                if consent_button:
+                                    await consent_button.click()
+                                    await asyncio.sleep(1)
+                                    break
+                            except:
+                                continue
                     
-                    # Press Enter
-                    await search_box.press('Enter')
-                    await self.page.wait_for_load_state("domcontentloaded", timeout=15000)  # Reduced timeout
-                    await asyncio.sleep(2)
+                    # Find search box again for each search (to avoid detached element issues)
+                    search_box = None
+                    for selector in search_selectors:
+                        try:
+                            search_box = await self.page.query_selector(selector)
+                            if search_box:
+                                print(f"Found search box with selector: {selector}")
+                                break
+                        except:
+                            continue
+                    
+                    if not search_box:
+                        # Try to find any input field
+                        search_box = await self.page.query_selector('input, textarea')
+                    
+                    if not search_box:
+                        print(f"Could not find search input field for query: {query}")
+                        search_results[query] = []
+                        continue
+                    
+                    # Clear and fill search box with shorter timeout
+                    try:
+                        await search_box.click(timeout=5000)
+                        await search_box.fill("")
+                        await asyncio.sleep(0.5)
+                        await search_box.type(query, delay=50)  # Faster typing
+                        await asyncio.sleep(0.5)
+                        
+                        # Press Enter
+                        await search_box.press('Enter')
+                        await self.page.wait_for_load_state("domcontentloaded", timeout=10000)
+                        await asyncio.sleep(1)
+                    except Exception as e:
+                        print(f"Error interacting with search box: {e}")
+                        search_results[query] = []
+                        continue
                     
                     # Extract results with multiple selectors
                     result_selectors = [
@@ -352,7 +380,7 @@ class UniversityDataScraper:
                     unique_results = []
                     seen_urls = set()
                     
-                    for result in results[:10]:  # Reduced to top 10 results
+                    for result in results[:8]:  # Reduced to top 8 results
                         try:
                             # Try multiple selectors for title and link
                             title_selectors = ['h3', '.LC20lb', '.DKV0Md', 'a[href] h3']
@@ -415,8 +443,8 @@ class UniversityDataScraper:
                     search_results[query] = unique_results
                     
                     # Wait between searches
-                    if i < len(search_queries[:5]) - 1:
-                        await asyncio.sleep(2)  # Reduced wait time
+                    if i < len(search_queries[:3]) - 1:
+                        await asyncio.sleep(1)  # Reduced wait time
                         
                 except Exception as e:
                     print(f"Error during search for '{query}': {e}")
@@ -537,13 +565,258 @@ class UniversityDataScraper:
         
         return search_results
 
+    async def _try_educational_database_search(self, university_name: str, search_queries: List[str]) -> Dict[str, Any]:
+        """Try searching educational databases and university websites directly"""
+        search_results = {}
+        
+        try:
+            print("Attempting educational database search...")
+            
+            # List of educational databases and university ranking sites
+            educational_sites = [
+                "https://www.usnews.com/best-colleges",
+                "https://www.timeshighereducation.com/world-university-rankings",
+                "https://www.topuniversities.com/university-rankings",
+                "https://www.collegefactual.com",
+                "https://www.collegesimply.com",
+                "https://www.universityguru.com",
+                "https://www.unirank.org",
+                "https://www.edurank.org",
+                "https://www.4icu.org",
+                "https://www.webometrics.info"
+            ]
+            
+            for site in educational_sites:
+                try:
+                    print(f"Searching on: {site}")
+                    await self.page.goto(site, wait_until="domcontentloaded", timeout=15000)
+                    await asyncio.sleep(2)
+                    
+                    # Try to find search functionality
+                    search_selectors = [
+                        'input[type="search"]',
+                        'input[name*="search"]',
+                        'input[placeholder*="search"]',
+                        'input[placeholder*="Search"]',
+                        'input[id*="search"]',
+                        'input[class*="search"]',
+                        '.search input',
+                        '#search input',
+                        'form input[type="text"]'
+                    ]
+                    
+                    search_box = None
+                    for selector in search_selectors:
+                        try:
+                            search_box = await self.page.query_selector(selector)
+                            if search_box:
+                                break
+                        except:
+                            continue
+                    
+                    if search_box:
+                        # Try to search for the university
+                        await search_box.fill(university_name)
+                        await asyncio.sleep(1)
+                        await search_box.press('Enter')
+                        await self.page.wait_for_load_state("domcontentloaded", timeout=10000)
+                        await asyncio.sleep(2)
+                        
+                        # Extract results
+                        results = await self.page.query_selector_all('a[href*="http"]')
+                        query_results = []
+                        
+                        for result in results[:10]:
+                            try:
+                                href = await result.get_attribute('href')
+                                title = await result.inner_text()
+                                
+                                if href and href.startswith('http') and len(title.strip()) > 10:
+                                    # Check if the URL contains university-related keywords
+                                    if any(keyword in href.lower() for keyword in ['university', 'college', 'edu', 'academic']):
+                                        query_results.append({
+                                            "title": title.strip(),
+                                            "url": href,
+                                            "snippet": f"Found on {site}"
+                                        })
+                                        print(f"  - Found: {title.strip()}")
+                                        print(f"    URL: {href}")
+                            except Exception as e:
+                                continue
+                        
+                        if query_results:
+                            search_results[f"{university_name} on {site}"] = query_results
+                    
+                except Exception as e:
+                    print(f"Error searching {site}: {e}")
+                    continue
+            
+            # Also try direct university website access
+            direct_urls = [
+                f"https://www.{university_name.lower().replace(' ', '').replace('university', 'edu')}.edu",
+                f"https://{university_name.lower().replace(' ', '').replace('university', 'edu')}.edu",
+                f"https://www.{university_name.lower().replace(' ', '-')}.edu",
+                f"https://{university_name.lower().replace(' ', '-')}.edu"
+            ]
+            
+            for url in direct_urls:
+                try:
+                    await self.page.goto(url, wait_until="domcontentloaded", timeout=10000)
+                    await asyncio.sleep(2)
+                    
+                    title = await self.page.title()
+                    if title and "error" not in title.lower() and "not found" not in title.lower():
+                        search_results[f"{university_name} official website"] = [{
+                            "title": title,
+                            "url": url,
+                            "snippet": f"Direct access to {university_name} official website"
+                        }]
+                        print(f"✅ Found direct website: {url}")
+                        break
+                        
+                except Exception as e:
+                    print(f"Direct access failed for {url}: {e}")
+                    continue
+                    
+        except Exception as e:
+            print(f"Educational database search failed: {e}")
+            for query in search_queries:
+                search_results[query] = []
+        
+        return search_results
+
+    async def _try_wikipedia_academic_search(self, university_name: str, search_queries: List[str]) -> Dict[str, Any]:
+        """Try searching Wikipedia and academic sources for university information"""
+        search_results = {}
+        
+        try:
+            print("Attempting Wikipedia and academic source search...")
+            
+            # Try Wikipedia first
+            try:
+                wiki_url = f"https://en.wikipedia.org/wiki/{university_name.replace(' ', '_')}"
+                await self.page.goto(wiki_url, wait_until="domcontentloaded", timeout=10000)
+                await asyncio.sleep(2)
+                
+                # Check if page exists
+                title = await self.page.title()
+                if title and "does not exist" not in title.lower():
+                    # Extract external links from Wikipedia
+                    external_links = await self.page.query_selector_all('a[href^="http"]')
+                    query_results = []
+                    
+                    for link in external_links[:15]:
+                        try:
+                            href = await link.get_attribute('href')
+                            title_text = await link.inner_text()
+                            
+                            if href and len(title_text.strip()) > 5:
+                                # Filter for university-related links
+                                if any(keyword in href.lower() for keyword in ['university', 'college', 'edu', 'academic', 'research']):
+                                    query_results.append({
+                                        "title": title_text.strip(),
+                                        "url": href,
+                                        "snippet": f"External link from Wikipedia article about {university_name}"
+                                    })
+                                    print(f"  - Found: {title_text.strip()}")
+                                    print(f"    URL: {href}")
+                        except Exception as e:
+                            continue
+                    
+                    if query_results:
+                        search_results[f"{university_name} Wikipedia external links"] = query_results
+                        
+            except Exception as e:
+                print(f"Wikipedia search failed: {e}")
+            
+            # Try academic databases
+            academic_sites = [
+                "https://scholar.google.com",
+                "https://www.researchgate.net",
+                "https://www.academia.edu",
+                "https://www.linkedin.com/school"
+            ]
+            
+            for site in academic_sites:
+                try:
+                    print(f"Searching academic site: {site}")
+                    await self.page.goto(site, wait_until="domcontentloaded", timeout=10000)
+                    await asyncio.sleep(2)
+                    
+                    # Look for search functionality
+                    search_selectors = [
+                        'input[type="search"]',
+                        'input[name*="q"]',
+                        'input[placeholder*="search"]',
+                        'input[placeholder*="Search"]',
+                        '.search input',
+                        '#search input'
+                    ]
+                    
+                    search_box = None
+                    for selector in search_selectors:
+                        try:
+                            search_box = await self.page.query_selector(selector)
+                            if search_box:
+                                break
+                        except:
+                            continue
+                    
+                    if search_box:
+                        await search_box.fill(university_name)
+                        await asyncio.sleep(1)
+                        await search_box.press('Enter')
+                        await self.page.wait_for_load_state("domcontentloaded", timeout=10000)
+                        await asyncio.sleep(2)
+                        
+                        # Extract results
+                        results = await self.page.query_selector_all('a[href*="http"]')
+                        query_results = []
+                        
+                        for result in results[:8]:
+                            try:
+                                href = await result.get_attribute('href')
+                                title = await result.inner_text()
+                                
+                                if href and href.startswith('http') and len(title.strip()) > 5:
+                                    query_results.append({
+                                        "title": title.strip(),
+                                        "url": href,
+                                        "snippet": f"Found on {site}"
+                                    })
+                                    print(f"  - Found: {title.strip()}")
+                                    print(f"    URL: {href}")
+                            except Exception as e:
+                                continue
+                        
+                        if query_results:
+                            search_results[f"{university_name} on {site}"] = query_results
+                    
+                except Exception as e:
+                    print(f"Error searching {site}: {e}")
+                    continue
+                    
+        except Exception as e:
+            print(f"Wikipedia and academic search failed: {e}")
+            for query in search_queries:
+                search_results[query] = []
+        
+        return search_results
+
     async def scrape_webpage_content(self, url: str) -> Dict[str, Any]:
         """Scrape content from a specific webpage"""
         try:
-            await self.page.goto(url, wait_until="domcontentloaded", timeout=15000)  # Reduced timeout
+            # Set a shorter timeout and handle different load states
+            await self.page.goto(url, wait_until="domcontentloaded", timeout=10000)  # Reduced timeout
             
-            # Extract page content
+            # Check if page loaded successfully
             title = await self.page.title()
+            if not title or title.lower() in ['error', 'not found', '404', 'forbidden', 'access denied']:
+                return {
+                    "url": url,
+                    "error": f"Page not accessible: {title}",
+                    "scraped_at": datetime.now().isoformat()
+                }
             
             # Get main content with more comprehensive extraction
             content = await self.page.evaluate("""
@@ -610,6 +883,14 @@ class UniversityDataScraper:
                 }
             """)
             
+            # Check if content is meaningful
+            if not content or len(content.strip()) < 50:
+                return {
+                    "url": url,
+                    "error": "Page has insufficient content",
+                    "scraped_at": datetime.now().isoformat()
+                }
+            
             # Extract links
             links = await self.page.evaluate("""
                 () => {
@@ -630,10 +911,23 @@ class UniversityDataScraper:
             }
             
         except Exception as e:
-            print(f"Error scraping {url}: {e}")
+            error_msg = str(e)
+            
+            # Handle specific error types
+            if "net::ERR_ABORTED" in error_msg:
+                error_msg = "Page access blocked or resource not available"
+            elif "net::ERR_HTTP2_PROTOCOL_ERROR" in error_msg:
+                error_msg = "HTTP protocol error - site may be blocking access"
+            elif "net::ERR_CONNECTION_TIMED_OUT" in error_msg:
+                error_msg = "Connection timed out"
+            elif "net::ERR_NAME_NOT_RESOLVED" in error_msg:
+                error_msg = "Domain not found"
+            elif "net::ERR_SSL_PROTOCOL_ERROR" in error_msg:
+                error_msg = "SSL/TLS error"
+            
             return {
                 "url": url,
-                "error": str(e),
+                "error": error_msg,
                 "scraped_at": datetime.now().isoformat()
             }
 
@@ -646,7 +940,7 @@ class UniversityDataScraper:
         
         # Process content in chunks to avoid token limits
         for item in scraped_content:
-            if "content" in item:
+            if "content" in item and not item.get("error"):
                 content = item['content']
                 source_urls.append(item['url'])
         
@@ -655,15 +949,17 @@ class UniversityDataScraper:
                     'university', 'student', 'faculty', 'program', 'school', 'college',
                     'admission', 'tuition', 'cost', 'ranking', 'research', 'academic',
                     'degree', 'major', 'graduate', 'undergraduate', 'campus', 'facility',
-                    'financial', 'aid', 'scholarship', 'alumni', 'career', 'international'
+                    'financial', 'aid', 'scholarship', 'alumni', 'career', 'international',
+                    'contact', 'email', 'phone', 'address'
                 ]
                 
                 # Check if content contains relevant keywords
                 content_lower = content.lower()
                 relevance_score = sum(1 for keyword in relevant_keywords if keyword in content_lower)
                 
-                # Only process content with sufficient relevance
-                if relevance_score >= 2:  # At least 2 relevant keywords
+                # Only process content with sufficient relevance (reduced threshold for limited content)
+                min_relevance = 1 if len(scraped_content) < 5 else 2  # Lower threshold if we have few pages
+                if relevance_score >= min_relevance:
                     # Split content into larger chunks to reduce empty responses
                     chunk_size = 1200  # Increased chunk size
                     chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
@@ -679,11 +975,42 @@ class UniversityDataScraper:
                         }
                         all_content_chunks.append(chunk_data)
         
-        # Limit total chunks to avoid too many API calls
-        if len(all_content_chunks) > 20:
-            # Sort by relevance and take top chunks
-            all_content_chunks.sort(key=lambda x: x['relevance_score'], reverse=True)
-            all_content_chunks = all_content_chunks[:20]
+        # If we have very few chunks, be more lenient
+        if len(all_content_chunks) < 5:
+            print(f"⚠️  Limited content available ({len(all_content_chunks)} chunks). Using all available content.")
+            # Use all chunks we have
+        else:
+            # Limit total chunks to avoid too many API calls
+            if len(all_content_chunks) > 20:
+                # Sort by relevance and take top chunks
+                all_content_chunks.sort(key=lambda x: x['relevance_score'], reverse=True)
+                all_content_chunks = all_content_chunks[:20]
+        
+        print(f"📝 Processing {len(all_content_chunks)} content chunks for LLM analysis...")
+        
+        # Check if we have enough content to proceed
+        if len(all_content_chunks) == 0:
+            print("❌ No usable content found. Falling back to knowledge-based extraction...")
+            # Return a basic structure with minimal data
+            return {
+                "raw_response": "No scraped content available",
+                "structured_data": {
+                    "name": university_name,
+                    "website": f"https://www.{university_name.lower().replace(' ', '').replace(',', '').replace('.', '')}.edu",
+                    "country": "United States",  # Default assumption
+                    "city": "Unknown",
+                    "state": "Unknown",
+                    "phone": "Unknown",
+                    "email": f"info@{university_name.lower().replace(' ', '').replace(',', '').replace('.', '')}.edu",
+                    "confidence_score": 0.1,
+                    "source_urls": []
+                },
+                "confidence_score": 0.1,
+                "processing_time": 0.0,
+                "source_urls": [],
+                "batches_processed": 0,
+                "stage_2_completed": False
+            }
         
         # Process chunks in larger batches to reduce API calls
         batch_size = 8  # Increased batch size
@@ -713,6 +1040,13 @@ CRITICAL REQUIREMENTS:
 4. Fill EVERY field - if you don't find information, use your knowledge of {university_name}
 5. NEVER return null values - always provide some information
 6. For ARRAY fields, provide MULTIPLE items (at least 5-10 items per array)
+
+**CONTACT INFORMATION (VERY IMPORTANT):**
+- Extract email addresses from the content (look for @ symbols, contact forms, etc.)
+- Extract phone numbers (look for patterns like (123) 456-7890, +1-234-567-8900, etc.)
+- Common email patterns: admissions@university.edu, info@university.edu, contact@university.edu
+- If no specific email found, use general format: info@{university_name.lower().replace(' ', '').replace(',', '').replace('.', '')}.edu
+- For phone numbers, look for main switchboard, admissions office, international office numbers
 
 **ARRAY FIELDS - MUST PROVIDE MULTIPLE ITEMS:**
 
@@ -751,6 +1085,7 @@ CRITICAL REQUIREMENTS:
 - For arrays, provide MULTIPLE items (5-10 items minimum)
 - For objects, fill all nested fields
 - Use your knowledge of {university_name} to fill any missing information
+- **SPECIFICALLY LOOK FOR EMAIL ADDRESSES AND PHONE NUMBERS in the content**
 
 Return ONLY the complete JSON object matching the schema exactly with COMPREHENSIVE arrays.
 """
@@ -773,32 +1108,53 @@ Return ONLY the complete JSON object matching the schema exactly with COMPREHENS
             # Parse LLM response
             llm_response = response.choices[0].message.content.strip()
             
-            # Try to extract JSON from response
-            try:
-                # Remove any markdown formatting
-                if llm_response.startswith("```json"):
-                    llm_response = llm_response[7:]
-                if llm_response.endswith("```"):
-                    llm_response = llm_response[:-3]
-                
-                structured_data = json.loads(llm_response)
-                
+            # Check if response is empty or invalid
+            if not llm_response or llm_response == "":
+                print(f"Warning: Empty LLM response for batch {i // batch_size}")
                 all_results.append({
-                    "raw_response": llm_response,
-                    "structured_data": structured_data,
-                    "processing_time": processing_time,
-                    "batch_index": i // batch_size
-                })
-                
-            except json.JSONDecodeError as e:
-                print(f"Error parsing LLM response as JSON for batch {i // batch_size}: {e}")
-                all_results.append({
-                    "raw_response": llm_response,
+                    "raw_response": "",
                     "structured_data": None,
                     "processing_time": processing_time,
-                    "error": f"JSON parsing error: {e}",
+                    "error": "Empty response from LLM",
                     "batch_index": i // batch_size
                 })
+            else:
+                # Try to extract JSON from response
+                try:
+                    # Remove any markdown formatting
+                    if llm_response.startswith("```json"):
+                        llm_response = llm_response[7:]
+                    if llm_response.endswith("```"):
+                        llm_response = llm_response[:-3]
+                    
+                    # Try to find JSON in the response
+                    json_start = llm_response.find('{')
+                    json_end = llm_response.rfind('}') + 1
+                    
+                    if json_start != -1 and json_end > json_start:
+                        json_content = llm_response[json_start:json_end]
+                        structured_data = json.loads(json_content)
+                    else:
+                        # If no JSON found, try parsing the entire response
+                        structured_data = json.loads(llm_response)
+                    
+                    all_results.append({
+                        "raw_response": llm_response,
+                        "structured_data": structured_data,
+                        "processing_time": processing_time,
+                        "batch_index": i // batch_size
+                    })
+                    
+                except json.JSONDecodeError as e:
+                    print(f"Error parsing LLM response as JSON for batch {i // batch_size}: {e}")
+                    print(f"Response preview: {llm_response[:200]}...")
+                    all_results.append({
+                        "raw_response": llm_response,
+                        "structured_data": None,
+                        "processing_time": processing_time,
+                        "error": f"JSON parsing error: {e}",
+                        "batch_index": i // batch_size
+                    })
                 
         except Exception as e:
             print(f"Error calling LLM API for batch {i // batch_size}: {e}")
@@ -957,40 +1313,56 @@ Return the COMPLETE JSON object with ALL fields filled and COMPREHENSIVE arrays.
         """Merge results from multiple batches into a single comprehensive dataset"""
         merged_data = {}
         
-        for batch_result in batch_results:
-            if batch_result.get("structured_data"):
-                batch_data = batch_result["structured_data"]
+        # Check if we have any valid structured data
+        valid_batches = [batch for batch in batch_results if batch.get("structured_data")]
+        
+        if not valid_batches:
+            print("⚠️  No valid structured data found in any batch. Using fallback data.")
+            return {
+                "name": "Unknown University",
+                "website": "https://example.edu",
+                "country": "Unknown",
+                "city": "Unknown",
+                "state": "Unknown",
+                "phone": "Unknown",
+                "email": "info@example.edu",
+                "confidence_score": 0.0,
+                "source_urls": []
+            }
+        
+        for batch_result in valid_batches:
+            batch_data = batch_result["structured_data"]
+            
+            # Merge simple fields (take first non-null value)
+            for field, value in batch_data.items():
+                if field not in merged_data or merged_data[field] is None or merged_data[field] == "":
+                    if value is not None and value != "" and value != "Not Available":
+                        merged_data[field] = value
                 
-                # Merge simple fields (take first non-null value)
-                for field, value in batch_data.items():
-                    if field not in merged_data or merged_data[field] is None or merged_data[field] == "":
-                        if value is not None and value != "" and value != "Not Available":
-                            merged_data[field] = value
-                
-                # Merge arrays (combine unique items)
-                array_fields = ["programs", "source_urls"]
-                for field in array_fields:
-                    if field in batch_data and batch_data[field]:
-                        if field not in merged_data:
-                            merged_data[field] = []
-                        
-                        # Add unique items
-                        existing_items = {str(item) for item in merged_data[field]}
-                        for item in batch_data[field]:
-                            if str(item) not in existing_items:
-                                merged_data[field].append(item)
-                
-                # Merge nested objects (recursively merge)
-                object_fields = ["subject_rankings", "student_life", "financial_aid", 
-                               "international_students", "alumni"]
-                
-                for field in object_fields:
-                    if field in batch_data and batch_data[field]:
-                        if field not in merged_data:
-                            merged_data[field] = {}
-                        
-                        # Recursively merge nested objects
-                        merged_data[field] = self._merge_nested_objects(merged_data[field], batch_data[field])
+            # Merge arrays (combine unique items)
+            array_fields = ["programs", "source_urls"]
+            for field in array_fields:
+                if field in batch_data and batch_data[field]:
+                    if field not in merged_data:
+                        merged_data[field] = []
+                    
+                    # Add unique items
+                    existing_items = {str(item) for item in merged_data[field]}
+                    for item in batch_data[field]:
+                        if str(item) not in existing_items:
+                            merged_data[field].append(item)
+            
+            # Merge nested objects (recursively merge)
+            object_fields = ["subject_rankings", "student_life", "financial_aid", 
+                           "international_students", "alumni"]
+            
+            for field in object_fields:
+                if field in batch_data and batch_data[field]:
+                    if field not in merged_data:
+                        merged_data[field] = {}
+                    
+                    # Recursively merge nested objects
+                    merged_data[field] = self._merge_nested_objects(merged_data[field], batch_data[field])
         
         return merged_data
 
@@ -1096,9 +1468,51 @@ Return the COMPLETE JSON object with ALL fields filled and COMPREHENSIVE arrays.
     async def collect_university_data(self, university_name: str) -> Dict[str, Any]:
         """Main method to collect university data using browser and LLM"""
         
+        # Create a new browser instance for each university to avoid conflicts
+        browser = None
+        page = None
+        playwright = None
+        
         try:
-            # Initialize browser
-            await self.initialize_browser()
+            # Initialize browser for this specific university
+            playwright = await async_playwright().start()
+            browser = await playwright.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--disable-gpu',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-renderer-backgrounding',
+                    '--disable-features=TranslateUI',
+                    '--disable-ipc-flooding-protection',
+                    '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                ]
+            )
+            page = await browser.new_page()
+            
+            # Set user agent and other headers to avoid detection
+            await page.set_extra_http_headers({
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            })
+            
+            # Set viewport
+            await page.set_viewport_size({"width": 1920, "height": 1080})
+            
+            # Temporarily set the page for this operation
+            original_page = self.page
+            self.page = page
             
             # Search for university information
             print(f"Searching for information about {university_name}...")
@@ -1109,23 +1523,69 @@ Return the COMPLETE JSON object with ALL fields filled and COMPREHENSIVE arrays.
             for query, results in search_results.items():
                 for result in results:
                     if result.get("url") and "http" in result["url"]:
-                        urls_to_scrape.append(result["url"])
+                        url = result["url"]
+                        
+                        # Filter out problematic URLs
+                        skip_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.zip', '.rar']
+                        skip_domains = ['usnews.com', 'timeshighereducation.com', 'topuniversities.com']  # Sites that often block scraping
+                        
+                        # Check if URL should be skipped
+                        should_skip = False
+                        
+                        # Skip PDF and other document files
+                        for ext in skip_extensions:
+                            if url.lower().endswith(ext):
+                                should_skip = True
+                                print(f"⏭️  Skipping document file: {url}")
+                                break
+                        
+                        # Skip problematic domains
+                        for domain in skip_domains:
+                            if domain in url.lower():
+                                should_skip = True
+                                print(f"⏭️  Skipping blocked domain: {url}")
+                                break
+                        
+                        # Skip URLs that are too long (likely API endpoints or complex queries)
+                        if len(url) > 200:
+                            should_skip = True
+                            print(f"⏭️  Skipping long URL: {url[:100]}...")
+                        
+                        if not should_skip:
+                            urls_to_scrape.append(url)
             
-            # Remove duplicates and limit to top 25 URLs (increased since we can handle more with chunking)
-            urls_to_scrape = list(set(urls_to_scrape))[:25]
+            # Remove duplicates and limit to top 20 URLs (reduced to avoid timeouts)
+            urls_to_scrape = list(set(urls_to_scrape))[:20]
+            print(f"📋 Selected {len(urls_to_scrape)} URLs for scraping (filtered from {sum(len(results) for results in search_results.values())} total results)")
             
             # Scrape content from URLs
             print(f"Scraping content from {len(urls_to_scrape)} URLs...")
             scraped_content = []
+            successful_scrapes = 0
+            failed_scrapes = 0
             
-            for url in urls_to_scrape:
+            for i, url in enumerate(urls_to_scrape, 1):
                 try:
+                    print(f"  [{i}/{len(urls_to_scrape)}] Scraping: {url}")
                     content = await self.scrape_webpage_content(url)
-                    scraped_content.append(content)
-                    await asyncio.sleep(0.5)  # Reduced rate limiting
+                    if content and not content.get("error"):
+                        scraped_content.append(content)
+                        successful_scrapes += 1
+                        print(f"    ✅ Success")
+                    else:
+                        failed_scrapes += 1
+                        print(f"    ❌ Failed: {content.get('error', 'Unknown error')}")
+                    await asyncio.sleep(1)  # Increased delay to be more respectful
                 except Exception as e:
-                    print(f"Error scraping {url}: {e}")
+                    failed_scrapes += 1
+                    print(f"    ❌ Error scraping {url}: {e}")
                     continue
+            
+            print(f"📊 Scraping completed: {successful_scrapes} successful, {failed_scrapes} failed")
+            
+            # Check if we have enough content to proceed
+            if len(scraped_content) < 3:
+                print("⚠️  Warning: Very few pages scraped successfully. Proceeding with limited data...")
             
             # Analyze with LLM
             print("Analyzing content with LLM...")
@@ -1207,13 +1667,89 @@ Return the COMPLETE JSON object with ALL fields filled and COMPREHENSIVE arrays.
         except Exception as e:
             print(f"Error collecting data for {university_name}: {e}")
             
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            # Try to save a basic result even if scraping failed
+            try:
+                basic_data = {
+                    'total_universities': 1,
+                    'successful_collections': 0,
+                    'failed_collections': 1,
+                    'generated_at': datetime.now(),
+                    'script_version': '1.0.0',
+                    'success': False,
+                    'data_collection_id': None,
+                    'name': university_name,
+                    'website': f"https://www.{university_name.lower().replace(' ', '').replace(',', '').replace('.', '')}.edu",
+                    'country': "United States",  # Default assumption
+                    'city': "Unknown",
+                    'state': "Unknown",
+                    'phone': "Unknown",
+                    'email': f"info@{university_name.lower().replace(' ', '').replace(',', '').replace('.', '')}.edu",
+                    'founded_year': None,
+                    'type': "Unknown",
+                    'student_population': None,
+                    'undergraduate_population': None,
+                    'graduate_population': None,
+                    'international_students_percentage': None,
+                    'faculty_count': None,
+                    'student_faculty_ratio': None,
+                    'acceptance_rate': None,
+                    'tuition_domestic': None,
+                    'tuition_international': None,
+                    'room_and_board': None,
+                    'total_cost_of_attendance': None,
+                    'financial_aid_available': None,
+                    'average_financial_aid_package': None,
+                    'scholarships_available': None,
+                    'world_ranking': None,
+                    'national_ranking': None,
+                    'regional_ranking': None,
+                    'subject_rankings': None,
+                    'description': f"Data collection failed for {university_name}",
+                    'mission_statement': None,
+                    'vision_statement': None,
+                    'campus_size': None,
+                    'campus_type': None,
+                    'climate': None,
+                    'timezone': None,
+                    'programs': None,
+                    'student_life': None,
+                    'financial_aid': None,
+                    'international_students': None,
+                    'alumni': None,
+                    'confidence_score': 0.0,
+                    'source_urls': None,
+                    'last_updated': datetime.now().strftime('%Y-%m-%d')
+                }
+                
+                result_record = UniversityDataCollectionResult(**basic_data)
+                self.db_session.add(result_record)
+                self.db_session.commit()
+                
+                print(f"✅ Saved basic result for {university_name} with ID: {result_record.id}")
+                
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "result_record_id": result_record.id
+                }
+                
+            except Exception as save_error:
+                print(f"Failed to save basic result: {save_error}")
+                return {
+                    "success": False,
+                    "error": str(e)
+                }
         
         finally:
-            await self.close_browser()
+            # Restore original page and close the temporary browser
+            self.page = original_page
+            try:
+                if browser:
+                    await browser.close()
+                if playwright:
+                    await playwright.stop()
+            except Exception as close_error:
+                print(f"Warning: Error closing browser: {close_error}")
 
     async def collect_university_data_batch(self, university_names: List[str]) -> Dict[str, Any]:
         """Collect data for multiple universities and save in batch format"""
@@ -1395,6 +1931,103 @@ Return the COMPLETE JSON object with ALL fields filled and COMPREHENSIVE arrays.
         
         print(f"✅ Results exported to: {output_file}")
         return output_file
+
+    async def _try_knowledge_based_fallback(self, university_name: str, search_queries: List[str]) -> Dict[str, Any]:
+        """Fallback strategy using LLM knowledge when all web searches fail"""
+        search_results = {}
+        
+        try:
+            print("Attempting knowledge-based fallback search...")
+            
+            # Use LLM to generate comprehensive university information
+            prompt = f"""
+You are a university data expert. For {university_name}, please provide comprehensive information in JSON format including:
+
+1. Official website URL (common patterns like .edu domains)
+2. Contact information (email, phone)
+3. Location details (city, state, country)
+4. Basic statistics (student population, faculty count, etc.)
+5. Academic programs and rankings
+6. Financial information
+7. International student services
+
+Please provide this information in a structured format that can be used to create search results. Focus on providing accurate, well-known information about {university_name}.
+"""
+            
+            response = await self.openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a university data expert. Provide comprehensive information about universities in JSON format."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=1500
+            )
+            
+            llm_response = response.choices[0].message.content.strip()
+            
+            # Create mock search results based on LLM knowledge
+            mock_results = []
+            
+            # Extract website from response
+            if "www." in llm_response.lower() or ".edu" in llm_response.lower():
+                # Try to extract website URL
+                import re
+                url_match = re.search(r'https?://[^\s]+', llm_response)
+                if url_match:
+                    website_url = url_match.group(0)
+                    mock_results.append({
+                        "title": f"{university_name} Official Website",
+                        "url": website_url,
+                        "snippet": f"Official website for {university_name} based on knowledge base"
+                    })
+            
+            # Add common university website patterns
+            common_domains = [
+                f"https://www.{university_name.lower().replace(' ', '').replace('university', 'edu')}.edu",
+                f"https://{university_name.lower().replace(' ', '').replace('university', 'edu')}.edu",
+                f"https://www.{university_name.lower().replace(' ', '-')}.edu",
+                f"https://{university_name.lower().replace(' ', '-')}.edu"
+            ]
+            
+            for domain in common_domains:
+                if domain not in [result.get('url', '') for result in mock_results]:
+                    mock_results.append({
+                        "title": f"{university_name} - Official Website",
+                        "url": domain,
+                        "snippet": f"Potential official website for {university_name}"
+                    })
+            
+            # Add Wikipedia as a fallback
+            wiki_url = f"https://en.wikipedia.org/wiki/{university_name.replace(' ', '_')}"
+            mock_results.append({
+                "title": f"{university_name} - Wikipedia",
+                "url": wiki_url,
+                "snippet": f"Wikipedia article about {university_name}"
+            })
+            
+            # Add common university ranking sites
+            ranking_sites = [
+                f"https://www.usnews.com/best-colleges/search?school-name={university_name.replace(' ', '+')}",
+                f"https://www.timeshighereducation.com/world-university-rankings/search?search={university_name.replace(' ', '+')}",
+                f"https://www.topuniversities.com/university-rankings/search?search={university_name.replace(' ', '+')}"
+            ]
+            
+            for site in ranking_sites:
+                mock_results.append({
+                    "title": f"{university_name} - Rankings",
+                    "url": site,
+                    "snippet": f"Ranking information for {university_name}"
+                })
+            
+            if mock_results:
+                search_results[f"{university_name} knowledge-based results"] = mock_results
+                print(f"✅ Knowledge-based fallback found {len(mock_results)} results")
+            
+        except Exception as e:
+            print(f"Knowledge-based fallback failed: {e}")
+        
+        return search_results
 
 async def main():
     """Example usage of the UniversityDataScraper"""

@@ -21,9 +21,44 @@ import {
   Zap
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { api } from '@/lib/api'
+import toast from 'react-hot-toast'
 
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('')
+  const [isCheckingAuth, setIsCheckingAuth] = useState(false)
+  const router = useRouter()
+
+  const handleStartJourney = async () => {
+    setIsCheckingAuth(true)
+    
+    try {
+      // Check if user is authenticated
+      const isAuth = await api.isAuthenticated()
+      
+      if (isAuth) {
+        // User is logged in, check if they have completed questionnaire
+        const userProfile = await api.getProfile()
+        if (userProfile.personality_summary && userProfile.personality_profile) {
+          // User has completed questionnaire, redirect to suggestions
+          router.push('/universities')
+        } else {
+          // User hasn't completed questionnaire, redirect to questionnaire
+          router.push('/questionnaire')
+        }
+      } else {
+        // User is not logged in, redirect to login page
+        router.push('/login')
+      }
+    } catch (error) {
+      console.error('Auth check error:', error)
+      // If there's an error, redirect to login page
+      router.push('/login')
+    } finally {
+      setIsCheckingAuth(false)
+    }
+  }
 
   const features = [
     {
@@ -119,11 +154,9 @@ export default function HomePage() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" asChild>
-              <Link href="/register">
-                Start Your Journey
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
+            <Button size="lg" onClick={handleStartJourney} disabled={isCheckingAuth}>
+              {isCheckingAuth ? 'Checking...' : 'Start Your Journey'}
+              <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
             <Button size="lg" variant="outline" asChild>
               <Link href="/demo">Watch Demo</Link>
@@ -226,11 +259,9 @@ export default function HomePage() {
               Join thousands of students who have already discovered their ideal university with UniMatch.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" variant="secondary" asChild>
-                <Link href="/register">
-                  Get Started Free
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
+              <Button size="lg" variant="secondary" onClick={handleStartJourney} disabled={isCheckingAuth}>
+                {isCheckingAuth ? 'Checking...' : 'Get Started Free'}
+                <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
               <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-primary" asChild>
                 <Link href="/login">Sign In</Link>

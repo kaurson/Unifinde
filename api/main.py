@@ -1,10 +1,7 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, Depends, HTTPException, status, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from typing import List, Optional
-import jwt
-from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any
 import bcrypt
 import sys
 import os
@@ -16,18 +13,21 @@ load_dotenv()
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from database.database import get_db, engine
 from database.models import Base as DatabaseBase, User, UniversityDataCollectionResult, Question, UserAnswer
 from app.models import Base as AppBase, University, Program, Facility
-from database.database import get_db, engine
 from api.schemas import (
     UserCreate, UserLogin, UserProfile, UserUpdate, AuthResponse,
     UniversityResponse, ProgramResponse,
     QuestionnaireResponse, PersonalityProfile,
     QuestionResponse, UserAnswerCreate, UserAnswerResponse, QuestionnaireSubmission
 )
-from api.auth import get_current_user, create_access_token
+from api.auth import get_current_user, create_access_token, set_auth_cookie, clear_auth_cookie
 from api.matching import MatchingService
+from api.enhanced_matching import EnhancedMatchingService
 from api.questionnaire import QuestionnaireService
+from api.vector_matcher import VectorMatchingService
+from database.models import CollectionResultVector
 # from api.school_scraper import SchoolScraperService
 # from api.university_data_collection import router as university_data_router
 
@@ -63,7 +63,7 @@ app.add_middleware(
 )
 
 # Security
-security = HTTPBearer()
+# security = HTTPBearer() # This line is removed as per the new_code, as the security object is no longer used for login/register.
 
 # Include routers
 # app.include_router(university_data_router)
@@ -72,6 +72,40 @@ security = HTTPBearer()
 async def root():
     return {"message": "University Matching API"}
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "database": "connected"}
+
+@app.get("/test-auth")
+async def test_auth(current_user: User = Depends(get_current_user)):
+    """Test endpoint to check if authentication is working"""
+    return {
+        "authenticated": True,
+        "user_id": str(current_user.id),
+        "email": current_user.email,
+        "username": current_user.username,
+        "has_personality_profile": bool(current_user.personality_profile)
+    }
+
+@app.get("/vectors/status")
+async def check_vectors_status(db: Session = Depends(get_db)):
+    """Check the status of collection vectors"""
+    try:
+        collection_vectors_count = db.query(CollectionResultVector).count()
+        collection_results_count = db.query(UniversityDataCollectionResult).count()
+        
+        return {
+            "collection_vectors_count": collection_vectors_count,
+            "collection_results_count": collection_results_count,
+            "vectors_generated": collection_vectors_count > 0,
+            "status": "ready" if collection_vectors_count > 0 else "needs_generation"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error"
+        }
+
 # Authentication endpoints
 @app.options("/{full_path:path}")
 async def options_handler(full_path: str):
@@ -79,9 +113,8 @@ async def options_handler(full_path: str):
     return {"message": "OK"}
 
 @app.post("/auth/register", response_model=AuthResponse)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user"""
-    print(f"🔍 Registration attempt received for: {user_data.email}")
+async def register(user_data: UserCreate, response: Response, db: Session = Depends(get_db)):
+    """Register new user"""
     try:
         # Check if user already exists
         existing_user = db.query(User).filter(
@@ -89,27 +122,19 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         ).first()
         
         if existing_user:
-            if existing_user.email == user_data.email:
-                print(f"❌ Registration failed: Email already exists - {user_data.email}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="User with this email already exists"
-                )
-            else:
-                print(f"❌ Registration failed: Username already taken - {user_data.username}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Username already taken"
-                )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email or username already registered"
+            )
         
         # Hash password
-        hashed_password = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
+        password_hash = bcrypt.hashpw(user_data.password.encode('utf-8'), bcrypt.gensalt())
         
         # Create new user
         new_user = User(
             username=user_data.username,
             email=user_data.email,
-            password_hash=hashed_password.decode('utf-8'),
+            password_hash=password_hash.decode('utf-8'),
             name=user_data.name
         )
         
@@ -117,10 +142,10 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(new_user)
         
-        # Create access token
+        # Create access token and set cookie
         access_token = create_access_token(data={"sub": new_user.email})
+        set_auth_cookie(response, access_token)
         
-        print(f"✅ Registration successful for: {user_data.email}")
         return AuthResponse(
             access_token=access_token,
             token_type="bearer",
@@ -155,7 +180,7 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
         )
 
 @app.post("/auth/login", response_model=AuthResponse)
-async def login(user_data: UserLogin, db: Session = Depends(get_db)):
+async def login(user_data: UserLogin, response: Response, db: Session = Depends(get_db)):
     """Login user"""
     try:
         user = db.query(User).filter(User.email == user_data.email).first()
@@ -166,7 +191,9 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
                 detail="Invalid email or password"
             )
         
+        # Create access token and set cookie
         access_token = create_access_token(data={"sub": user.email})
+        set_auth_cookie(response, access_token)
         
         return AuthResponse(
             access_token=access_token,
@@ -199,6 +226,12 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Login failed"
         )
+
+@app.post("/auth/logout")
+async def logout(response: Response):
+    """Clear authentication cookies"""
+    clear_auth_cookie(response)
+    return {"message": "Logged out successfully"}
 
 @app.get("/profile", response_model=UserProfile)
 async def get_profile(current_user: User = Depends(get_current_user)):
@@ -571,6 +604,68 @@ async def get_university(university_id: str, db: Session = Depends(get_db)):
         ]
     )
 
+@app.get("/universities/collection/{university_id}")
+async def get_collection_university(university_id: str, db: Session = Depends(get_db)):
+    """Get a specific university from the collection results table"""
+    from database.models import UniversityDataCollectionResult
+    
+    university = db.query(UniversityDataCollectionResult).filter(UniversityDataCollectionResult.id == university_id).first()
+    
+    if not university:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="University not found"
+        )
+    
+    # Convert to the same format as UniversityResponse but with collection result fields
+    return {
+        "id": str(university.id),
+        "name": university.name,
+        "website": university.website,
+        "country": university.country,
+        "city": university.city,
+        "state": university.state,
+        "phone": university.phone,
+        "email": university.email,
+        "founded_year": university.founded_year,
+        "type": university.type,
+        "student_population": university.student_population,
+        "undergraduate_population": university.undergraduate_population,
+        "graduate_population": university.graduate_population,
+        "faculty_count": university.faculty_count,
+        "student_faculty_ratio": university.student_faculty_ratio,
+        "acceptance_rate": university.acceptance_rate,
+        "tuition_domestic": university.tuition_domestic,
+        "tuition_international": university.tuition_international,
+        "room_and_board": university.room_and_board,
+        "total_cost_of_attendance": university.total_cost_of_attendance,
+        "financial_aid_available": university.financial_aid_available,
+        "average_financial_aid_package": university.average_financial_aid_package,
+        "scholarships_available": university.scholarships_available,
+        "world_ranking": university.world_ranking,
+        "national_ranking": university.national_ranking,
+        "regional_ranking": university.regional_ranking,
+        "subject_rankings": university.subject_rankings,
+        "description": university.description,
+        "mission_statement": university.mission_statement,
+        "vision_statement": university.vision_statement,
+        "campus_size": university.campus_size,
+        "campus_type": university.campus_type,
+        "climate": university.climate,
+        "timezone": university.timezone,
+        "international_students_percentage": university.international_students_percentage,
+        "programs": university.programs,
+        "student_life": university.student_life,
+        "financial_aid": university.financial_aid,
+        "international_students": university.international_students,
+        "alumni": university.alumni,
+        "confidence_score": university.confidence_score,
+        "source_urls": university.source_urls,
+        "last_updated": university.last_updated,
+        "created_at": university.created_at.isoformat() if university.created_at else None,
+        "updated_at": university.updated_at.isoformat() if university.updated_at else None
+    }
+
 # Vector Matching endpoints
 @app.post("/matches/generate")
 async def generate_matches(
@@ -667,6 +762,350 @@ async def clear_matching_cache(current_user: User = Depends(get_current_user)):
     matching_service = MatchingService()
     matching_service.clear_vector_cache()
     return {"message": "Vector matching cache cleared successfully"}
+
+@app.post("/matches/collection/generate")
+async def generate_collection_matches(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate matches for current user using pre-generated collection result vectors"""
+    if not current_user.personality_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete the questionnaire first"
+        )
+    
+    try:
+        # Check if collection vectors exist
+        collection_vectors_count = db.query(CollectionResultVector).count()
+        print(f"Found {collection_vectors_count} collection vectors")
+        
+        if collection_vectors_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No collection vectors found. Please generate vectors first."
+            )
+        
+        vector_matcher = VectorMatchingService()
+        print(f"Generating matches for user {current_user.email}")
+        
+        matches = await vector_matcher.find_collection_matches(
+            current_user, 
+            db, 
+            limit=limit
+        )
+        
+        print(f"Generated {len(matches)} matches")
+        
+        return {
+            "message": f"Generated {len(matches)} matches using collection result vectors",
+            "matches": matches,
+            "matching_method": "collection_vector_similarity",
+            "total_vectors_available": collection_vectors_count
+        }
+    
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        print(f"Error in generate_collection_matches: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate collection matches: {str(e)}"
+        )
+
+# Enhanced Matching endpoints
+@app.post("/matches/enhanced/generate")
+async def generate_enhanced_matches(
+    use_vector_matching: bool = True,
+    limit: int = 20,
+    include_programs: bool = True,
+    min_score: float = 0.5,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate enhanced matches with detailed scoring and analysis"""
+    if not current_user.personality_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete the questionnaire first"
+        )
+    
+    enhanced_matching_service = EnhancedMatchingService()
+    
+    try:
+        matches = await enhanced_matching_service.generate_enhanced_matches(
+            current_user, 
+            db, 
+            use_vector_matching=use_vector_matching,
+            limit=limit,
+            include_programs=include_programs,
+            min_score=min_score
+        )
+        
+        # Convert MatchResult objects to dictionaries for JSON response
+        match_dicts = []
+        for match in matches:
+            match_dict = {
+                "university_id": match.university_id,
+                "program_id": match.program_id,
+                "university_name": match.university_name,
+                "program_name": match.program_name,
+                "match_score": match.match_score.to_dict(),
+                "match_type": match.match_type.value,
+                "confidence": match.confidence,
+                "reasons": match.reasons,
+                "warnings": match.warnings,
+                "university_data": match.university_data,
+                "program_data": match.program_data,
+                "matching_method": match.matching_method,
+                "similarity_score": match.similarity_score,
+                "user_preferences": match.user_preferences,
+                "created_at": match.created_at.isoformat()
+            }
+            match_dicts.append(match_dict)
+        
+        return {
+            "message": f"Generated {len(matches)} enhanced matches using {'vector similarity' if use_vector_matching else 'traditional scoring'}",
+            "matches": match_dicts,
+            "matching_method": "vector_similarity" if use_vector_matching else "traditional_scoring",
+            "total_matches": len(matches),
+            "match_breakdown": {
+                "perfect": len([m for m in matches if m.match_type.value == "perfect"]),
+                "excellent": len([m for m in matches if m.match_type.value == "excellent"]),
+                "good": len([m for m in matches if m.match_type.value == "good"]),
+                "fair": len([m for m in matches if m.match_type.value == "fair"]),
+                "poor": len([m for m in matches if m.match_type.value == "poor"])
+            }
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate enhanced matches: {str(e)}"
+        )
+
+@app.get("/matches/enhanced/analysis")
+async def get_matching_analysis(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get detailed analysis of user's matching profile"""
+    if not current_user.personality_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete the questionnaire first"
+        )
+    
+    enhanced_matching_service = EnhancedMatchingService()
+    
+    try:
+        # Generate a small set of matches for analysis
+        matches = await enhanced_matching_service.generate_enhanced_matches(
+            current_user, 
+            db, 
+            use_vector_matching=True,
+            limit=10,
+            include_programs=True,
+            min_score=0.3
+        )
+        
+        # Calculate average scores
+        if matches:
+            avg_scores = {
+                "overall": sum(m.match_score.overall for m in matches) / len(matches),
+                "academic": sum(m.match_score.academic for m in matches) / len(matches),
+                "financial": sum(m.match_score.financial for m in matches) / len(matches),
+                "location": sum(m.match_score.location for m in matches) / len(matches),
+                "personality": sum(m.match_score.personality for m in matches) / len(matches),
+                "career": sum(m.match_score.career for m in matches) / len(matches),
+                "social": sum(m.match_score.social for m in matches) / len(matches)
+            }
+        else:
+            avg_scores = {
+                "overall": 0.0,
+                "academic": 0.0,
+                "financial": 0.0,
+                "location": 0.0,
+                "personality": 0.0,
+                "career": 0.0,
+                "social": 0.0
+            }
+        
+        # Generate recommendations
+        recommendations = []
+        
+        if avg_scores["academic"] < 0.6:
+            recommendations.append("Consider improving your academic profile or adjusting your university preferences")
+        
+        if avg_scores["financial"] < 0.6:
+            recommendations.append("Consider expanding your budget or looking for universities with better financial aid")
+        
+        if avg_scores["location"] < 0.6:
+            recommendations.append("Consider being more flexible with location preferences")
+        
+        if avg_scores["personality"] < 0.6:
+            recommendations.append("Consider universities with different learning environments")
+        
+        return {
+            "user_profile_summary": {
+                "name": current_user.name,
+                "preferred_majors": current_user.preferred_majors,
+                "preferred_locations": current_user.preferred_locations,
+                "max_tuition": current_user.max_tuition,
+                "preferred_university_type": current_user.preferred_university_type
+            },
+            "average_match_scores": avg_scores,
+            "recommendations": recommendations,
+            "total_universities_analyzed": len(matches),
+            "profile_completeness": _calculate_profile_completeness(current_user)
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate matching analysis: {str(e)}"
+        )
+
+@app.post("/matches/enhanced/filter")
+async def filter_enhanced_matches(
+    filters: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Filter enhanced matches based on specific criteria"""
+    if not current_user.personality_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete the questionnaire first"
+        )
+    
+    enhanced_matching_service = EnhancedMatchingService()
+    
+    try:
+        # Generate initial matches
+        initial_matches = await enhanced_matching_service.generate_enhanced_matches(
+            current_user, 
+            db, 
+            use_vector_matching=True,
+            limit=50,  # Get more matches for filtering
+            include_programs=True,
+            min_score=0.3
+        )
+        
+        # Apply filters
+        filtered_matches = []
+        for match in initial_matches:
+            if _apply_filters(match, filters):
+                filtered_matches.append(match)
+        
+        # Convert to dictionaries
+        match_dicts = []
+        for match in filtered_matches:
+            match_dict = {
+                "university_id": match.university_id,
+                "program_id": match.program_id,
+                "university_name": match.university_name,
+                "program_name": match.program_name,
+                "match_score": match.match_score.to_dict(),
+                "match_type": match.match_type.value,
+                "confidence": match.confidence,
+                "reasons": match.reasons,
+                "warnings": match.warnings,
+                "university_data": match.university_data,
+                "program_data": match.program_data,
+                "matching_method": match.matching_method,
+                "similarity_score": match.similarity_score,
+                "user_preferences": match.user_preferences,
+                "created_at": match.created_at.isoformat()
+            }
+            match_dicts.append(match_dict)
+        
+        return {
+            "message": f"Filtered {len(filtered_matches)} matches from {len(initial_matches)} total matches",
+            "matches": match_dicts,
+            "filters_applied": filters,
+            "total_matches": len(filtered_matches)
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to filter matches: {str(e)}"
+        )
+
+def _apply_filters(match, filters: Dict[str, Any]) -> bool:
+    """Apply filters to a match"""
+    university_data = match.university_data
+    
+    # Location filter
+    if "locations" in filters and filters["locations"]:
+        if university_data.get("city") not in filters["locations"]:
+            return False
+    
+    # Tuition filter
+    if "max_tuition" in filters and filters["max_tuition"]:
+        if university_data.get("tuition_domestic", 0) > filters["max_tuition"]:
+            return False
+    
+    # University type filter
+    if "university_types" in filters and filters["university_types"]:
+        if university_data.get("type") not in filters["university_types"]:
+            return False
+    
+    # Program field filter
+    if "program_fields" in filters and filters["program_fields"] and match.program_data:
+        if match.program_data.get("field") not in filters["program_fields"]:
+            return False
+    
+    # Match score filter
+    if "min_overall_score" in filters and filters["min_overall_score"]:
+        if match.match_score.overall < filters["min_overall_score"]:
+            return False
+    
+    # Match type filter
+    if "match_types" in filters and filters["match_types"]:
+        if match.match_type.value not in filters["match_types"]:
+            return False
+    
+    return True
+
+def _calculate_profile_completeness(user: User) -> float:
+    """Calculate the completeness of user profile"""
+    total_fields = 0
+    filled_fields = 0
+    
+    # Basic profile fields
+    basic_fields = [
+        user.name, user.age, user.phone, user.income,
+        user.preferred_majors, user.preferred_locations,
+        user.min_acceptance_rate, user.max_tuition,
+        user.preferred_university_type, user.personality_profile
+    ]
+    
+    for field in basic_fields:
+        total_fields += 1
+        if field is not None and field != []:
+            filled_fields += 1
+    
+    # Student profile fields
+    if user.student_profile:
+        student = user.student_profile
+        student_fields = [
+            student.gpa, student.sat_total, student.act_composite,
+            student.current_school, student.graduation_year,
+            student.preferred_class_size, student.career_aspirations
+        ]
+        
+        for field in student_fields:
+            total_fields += 1
+            if field is not None:
+                filled_fields += 1
+    
+    return (filled_fields / total_fields) * 100 if total_fields > 0 else 0
 
 if __name__ == "__main__":
     import uvicorn

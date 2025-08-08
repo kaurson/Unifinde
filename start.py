@@ -73,8 +73,7 @@ def check_env_file():
 def create_env_template():
     """Create a template .env file"""
     template = """# Database Configuration
-DATABASE_URL=postgresql://user:password@localhost/university_matching
-# For SQLite (development): DATABASE_URL=sqlite:///./universities.db
+DATABASE_URL=mysql+pymysql://root@localhost:3306/uniapp
 
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key_here

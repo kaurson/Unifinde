@@ -16,34 +16,57 @@ interface QuestionComponentProps {
 
 // Boolean (True/False) Question Component
 export function BooleanQuestion({ question, answer, onAnswer }: QuestionComponentProps) {
+  // Extract options from question text
+  // Format: "Would you rather A or B?" -> ["A", "B"]
+  let options = ['Option 1', 'Option 2']
+  
+  if (question.question_text.includes('Would you rather')) {
+    // Handle "Would you rather A or B?" format
+    const match = question.question_text.match(/Would you rather (.+?) or (.+?)\??$/)
+    if (match) {
+      options = [match[1].trim(), match[2].trim()]
+    }
+  } else if (question.question_text.includes(' or ')) {
+    // Handle other "A or B" formats
+    const parts = question.question_text.split(' or ')
+    if (parts.length >= 2) {
+      // Clean up the parts
+      const firstPart = parts[0].replace(/^.*\?/, '').trim()
+      const secondPart = parts[1].replace(/\?.*$/, '').trim()
+      if (firstPart && secondPart) {
+        options = [firstPart, secondPart]
+      }
+    }
+  }
+
   return (
     <div className="grid grid-cols-2 gap-4">
       <Button
-        variant={answer === true ? "default" : "outline"}
+        variant={answer === options[0] ? "default" : "outline"}
         size="lg"
         className={`h-16 text-lg transition-all ${
-          answer === true 
+          answer === options[0] 
             ? 'bg-primary text-primary-foreground' 
             : 'hover:bg-primary/10'
         }`}
-        onClick={() => onAnswer(true)}
+        onClick={() => onAnswer(options[0])}
       >
         <CheckCircle className="h-5 w-5 mr-2" />
-        True
+        {options[0]}
       </Button>
       
       <Button
-        variant={answer === false ? "default" : "outline"}
+        variant={answer === options[1] ? "default" : "outline"}
         size="lg"
         className={`h-16 text-lg transition-all ${
-          answer === false 
+          answer === options[1] 
             ? 'bg-primary text-primary-foreground' 
             : 'hover:bg-primary/10'
         }`}
-        onClick={() => onAnswer(false)}
+        onClick={() => onAnswer(options[1])}
       >
         <XCircle className="h-5 w-5 mr-2" />
-        False
+        {options[1]}
       </Button>
     </div>
   )
@@ -136,9 +159,15 @@ export function ScaleQuestion({ question, answer, onAnswer }: QuestionComponentP
 // Multiple Choice (3 options) Question Component
 export function MultipleChoice3Question({ question, answer, onAnswer }: QuestionComponentProps) {
   // Extract options from question text
-  const options = question.question_text.includes('?') 
-    ? question.question_text.split('?')[1]?.trim().split(' / ') || ['Option 1', 'Option 2', 'Option 3']
-    : ['Option 1', 'Option 2', 'Option 3']
+  let options = ['Option 1', 'Option 2', 'Option 3']
+  
+  if (question.question_text.includes(' / ')) {
+    // Handle "A / B / C" format
+    options = question.question_text.split(' / ').map(option => option.trim())
+  } else if (question.question_text.includes('breakfast / lunch / midnight snack')) {
+    // Handle the specific beans question
+    options = ['breakfast', 'lunch', 'midnight snack']
+  }
 
   return (
     <div className="space-y-3">
@@ -169,9 +198,21 @@ export function MultipleChoice3Question({ question, answer, onAnswer }: Question
 // Multiple Choice (5 options) Question Component
 export function MultipleChoice5Question({ question, answer, onAnswer }: QuestionComponentProps) {
   // Extract options from question text
-  const options = question.question_text.includes('?') 
-    ? question.question_text.split('?')[1]?.trim().split(' / ') || ['Option 1', 'Option 2', 'Option 3', 'Option 4', 'Option 5']
-    : ['Option 1', 'Option 2', 'Option 3', 'Option 4', 'Option 5']
+  let options = ['Option 1', 'Option 2', 'Option 3', 'Option 4', 'Option 5']
+  
+  if (question.question_text.includes(' / ')) {
+    // Handle "A / B / C / D / E" format
+    options = question.question_text.split(' / ').map(option => option.trim())
+  } else if (question.question_text.includes('Take turns chewing it / chew it together at the same time / take it yourself / throw it away (no one deserves it) / Give it to your friend')) {
+    // Handle the specific gum question
+    options = [
+      'Take turns chewing it',
+      'chew it together at the same time',
+      'take it yourself',
+      'throw it away (no one deserves it)',
+      'Give it to your friend'
+    ]
+  }
 
   return (
     <div className="space-y-3">

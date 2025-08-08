@@ -39,6 +39,21 @@ export default function UniversityDetailPage() {
 
   const universityId = params.id as string
 
+  // Helper function to safely parse JSON data
+  const parseJsonData = (data: any): any[] => {
+    if (!data) return []
+    if (Array.isArray(data)) return data
+    if (typeof data === 'string') {
+      try {
+        const parsed = JSON.parse(data)
+        return Array.isArray(parsed) ? parsed : []
+      } catch {
+        return []
+      }
+    }
+    return []
+  }
+
   useEffect(() => {
     const loadUniversity = async () => {
       if (!universityId) {
@@ -293,9 +308,10 @@ export default function UniversityDetailPage() {
 
         {/* Detailed Information Tabs */}
         <Tabs defaultValue="programs" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="programs">Programs</TabsTrigger>
             <TabsTrigger value="facilities">Facilities</TabsTrigger>
+            <TabsTrigger value="student-life">Student Life</TabsTrigger>
             <TabsTrigger value="about">About</TabsTrigger>
             <TabsTrigger value="admissions">Admissions</TabsTrigger>
           </TabsList>
@@ -309,40 +325,43 @@ export default function UniversityDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {university.programs && university.programs.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {university.programs.map((program) => (
-                      <Card key={program.id} className="p-4">
-                        <div className="space-y-2">
-                          <h4 className="font-semibold">{program.name}</h4>
-                          {program.level && (
-                            <Badge variant="outline">{program.level}</Badge>
-                          )}
-                          {program.field && (
-                            <Badge variant="secondary">{program.field}</Badge>
-                          )}
-                          {program.duration && (
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <Clock className="h-4 w-4 mr-1" />
-                              {program.duration}
-                            </div>
-                          )}
-                          {program.tuition && (
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <DollarSign className="h-4 w-4 mr-1" />
-                              ${program.tuition.toLocaleString()}/year
-                            </div>
-                          )}
-                          {program.description && (
-                            <p className="text-sm text-muted-foreground">{program.description}</p>
-                          )}
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground">No program information available.</p>
-                )}
+                {(() => {
+                  const programs = parseJsonData(university.programs)
+                  return programs.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {programs.map((program: any, index: number) => (
+                        <Card key={program.id || index} className="p-4">
+                          <div className="space-y-2">
+                            <h4 className="font-semibold">{program.name || program.field || 'Program'}</h4>
+                            {program.level && (
+                              <Badge variant="outline">{program.level}</Badge>
+                            )}
+                            {program.field && program.field !== program.name && (
+                              <Badge variant="secondary">{program.field}</Badge>
+                            )}
+                            {program.duration && (
+                              <div className="flex items-center text-sm text-muted-foreground">
+                                <Clock className="h-4 w-4 mr-1" />
+                                {program.duration}
+                              </div>
+                            )}
+                            {program.tuition && (
+                              <div className="flex items-center text-sm text-muted-foreground">
+                                <DollarSign className="h-4 w-4 mr-1" />
+                                ${program.tuition.toLocaleString()}/year
+                              </div>
+                            )}
+                            {program.description && (
+                              <p className="text-sm text-muted-foreground">{program.description}</p>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No program information available.</p>
+                  )
+                })()}
               </CardContent>
             </Card>
           </TabsContent>
@@ -356,31 +375,108 @@ export default function UniversityDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {university.facilities && university.facilities.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {university.facilities.map((facility) => (
-                      <Card key={facility.id} className="p-4">
-                        <div className="space-y-2">
-                          <h4 className="font-semibold">{facility.name}</h4>
-                          {facility.type && (
-                            <Badge variant="outline">{facility.type}</Badge>
+                {(() => {
+                  const facilities = parseJsonData(university.facilities)
+                  return facilities.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {facilities.map((facility: any, index: number) => (
+                        <Card key={facility.id || index} className="p-4">
+                          <div className="space-y-2">
+                            <h4 className="font-semibold">{facility.name || facility.type || 'Facility'}</h4>
+                            {facility.type && (
+                              <Badge variant="outline">{facility.type}</Badge>
+                            )}
+                            {facility.capacity && (
+                              <div className="flex items-center text-sm text-muted-foreground">
+                                <Users className="h-4 w-4 mr-1" />
+                                Capacity: {facility.capacity.toLocaleString()}
+                              </div>
+                            )}
+                            {facility.description && (
+                              <p className="text-sm text-muted-foreground">{facility.description}</p>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No facility information available.</p>
+                  )
+                })()}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="student-life" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Heart className="h-5 w-5 mr-2" />
+                  Student Life & Activities
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const studentLife = parseJsonData(university.student_life)
+                  if (studentLife.length > 0) {
+                    return (
+                      <div className="space-y-4">
+                        {studentLife.map((category: any, index: number) => (
+                          <div key={index} className="border rounded-lg p-4">
+                            <h4 className="font-semibold mb-3 capitalize">
+                              {category.category || category.name || `Category ${index + 1}`}
+                            </h4>
+                            {category.activities && Array.isArray(category.activities) && (
+                              <div className="grid gap-2 md:grid-cols-2">
+                                {category.activities.map((activity: string, activityIndex: number) => (
+                                  <div key={activityIndex} className="flex items-center space-x-2">
+                                    <div className="w-2 h-2 bg-primary rounded-full"></div>
+                                    <span className="text-sm">{activity}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {category.description && (
+                              <p className="text-sm text-muted-foreground mt-3">
+                                {category.description}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  } else if (university.international_students_percentage) {
+                    return (
+                      <div className="space-y-4">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {university.international_students_percentage && (
+                            <Card className="p-4">
+                              <div className="text-center">
+                                <div className="text-2xl font-bold text-primary">
+                                  {university.international_students_percentage}%
+                                </div>
+                                <div className="text-sm text-muted-foreground">International Students</div>
+                              </div>
+                            </Card>
                           )}
-                          {facility.capacity && (
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <Users className="h-4 w-4 mr-1" />
-                              Capacity: {facility.capacity.toLocaleString()}
-                            </div>
-                          )}
-                          {facility.description && (
-                            <p className="text-sm text-muted-foreground">{facility.description}</p>
+                          {university.student_faculty_ratio && (
+                            <Card className="p-4">
+                              <div className="text-center">
+                                <div className="text-2xl font-bold text-primary">
+                                  {university.student_faculty_ratio}:1
+                                </div>
+                                <div className="text-sm text-muted-foreground">Student-Faculty Ratio</div>
+                              </div>
+                            </Card>
                           )}
                         </div>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground">No facility information available.</p>
-                )}
+                        <p className="text-muted-foreground">Detailed student life information not available.</p>
+                      </div>
+                    )
+                  } else {
+                    return <p className="text-muted-foreground">No student life information available.</p>
+                  }
+                })()}
               </CardContent>
             </Card>
           </TabsContent>

@@ -10,7 +10,7 @@ import { ArrowLeft, Mail, Lock, GraduationCap } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { login } from '@/lib/api'
+import { api } from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -31,34 +31,30 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-
+    
     try {
-      const response = await login(formData.email, formData.password)
-
-      if (response.access_token) {
-        toast.success('Login successful!')
-        // Store token and redirect to dashboard
-        localStorage.setItem('token', response.access_token)
-        router.push('/dashboard')
+      const response = await api.login(formData.email, formData.password)
+      toast.success('Login successful!')
+      
+      // Check if user has completed the questionnaire
+      const userProfile = await api.getProfile()
+      
+      if (userProfile.personality_summary && userProfile.personality_profile) {
+        // User has completed questionnaire, redirect to suggestions
+        router.push('/universities')
       } else {
-        toast.error('Login failed')
+        // User hasn't completed questionnaire, redirect to questionnaire
+        router.push('/questionnaire')
       }
     } catch (error) {
       console.error('Login error:', error)
       
-      // Extract error message
-      let errorMessage = 'Login failed. Please try again.'
-      if (error instanceof Error) {
-        if (error.message.includes('Validation error:')) {
-          errorMessage = error.message.replace('Validation error: ', '')
-        } else if (error.message.includes('HTTP error! status: 401')) {
-          errorMessage = 'Incorrect email or password.'
-        } else {
-          errorMessage = error.message
-        }
+      // Check if it's a 401 error (invalid credentials)
+      if (error instanceof Error && error.message.includes('401')) {
+        toast.error('Invalid email or password. Please check your credentials or create a new account.')
+      } else {
+        toast.error('Login failed. Please check your credentials.')
       }
-      
-      toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }

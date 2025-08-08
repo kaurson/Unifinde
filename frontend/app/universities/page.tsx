@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -30,26 +30,104 @@ export default function UniversitiesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [favorites, setFavorites] = useState<string[]>([])
   const router = useRouter()
+  const isLoadingRef = useRef(false)
 
   useEffect(() => {
-    // Load universities from API
-    const loadUniversities = async () => {
+    // Check authentication and load universities
+    const checkAuthAndLoadUniversities = async () => {
+      // Prevent double requests
+      if (isLoadingRef.current) return
+      
+      isLoadingRef.current = true
       setIsLoading(true)
       try {
-        const data = await api.getUniversities()
-        setUniversities(data)
-        setFilteredUniversities(data)
-        toast.success('University matches loaded successfully!')
+        console.log('Checking authentication...')
+        // First check if user is authenticated
+        const isAuth = await api.isAuthenticated()
+        console.log('Authentication status:', isAuth)
+        
+        if (!isAuth) {
+          toast.error('Please log in to view your university matches')
+          router.push('/login')
+          return
+        }
+
+        // Test authentication with more details
+        try {
+          const authTest = await api.testAuth()
+          console.log('Auth test result:', authTest)
+        } catch (authError) {
+          console.error('Auth test failed:', authError)
+          toast.error('Authentication failed. Please log in again.')
+          router.push('/login')
+          return
+        }
+
+        // Check vectors status
+        try {
+          const vectorsStatus = await api.checkVectorsStatus()
+          console.log('Vectors status:', vectorsStatus)
+          
+          if (!vectorsStatus.vectors_generated) {
+            toast.error('University vectors are not ready. Please try again later.')
+            return
+          }
+        } catch (vectorsError) {
+          console.error('Vectors status check failed:', vectorsError)
+          toast.error('Unable to check vectors status. Please try again later.')
+          return
+        }
+
+        console.log('Getting user profile...')
+        // Check if user has completed questionnaire
+        const userProfile = await api.getProfile()
+        console.log('User profile:', userProfile)
+        
+        if (!userProfile.personality_profile) {
+          toast.error('Please complete the questionnaire first to get personalized matches')
+          router.push('/questionnaire')
+          return
+        }
+
+        console.log('Generating collection matches...')
+        // Use the new collection-based matching system
+        const matchesResponse = await api.generateCollectionMatches(20)
+        console.log('Matches response:', matchesResponse)
+        
+        // The response should be an array of matches, each with university_data
+        const matches = Array.isArray(matchesResponse) ? matchesResponse : []
+        
+        // Extract university data from matches
+        const universityData = matches.map((match: any) => match.university_data).filter(Boolean)
+        
+        setUniversities(universityData)
+        setFilteredUniversities(universityData)
+        toast.success('Your personalized university matches loaded successfully!')
       } catch (error) {
         console.error('Error loading universities:', error)
-        toast.error('Failed to load universities')
+        
+        // Handle different types of errors
+        if (error instanceof Error) {
+          if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+            toast.error('Please log in to view your university matches')
+            router.push('/login')
+          } else if (error.message.includes('400') || error.message.includes('questionnaire')) {
+            toast.error('Please complete the questionnaire first to get personalized matches')
+            router.push('/questionnaire')
+          } else {
+            toast.error('Failed to load university matches. Please try again.')
+          }
+        } else {
+          toast.error('Failed to load university matches. Please try again.')
+        }
       } finally {
         setIsLoading(false)
+        isLoadingRef.current = false
       }
     }
 
-    loadUniversities()
-  }, [])
+    checkAuthAndLoadUniversities()
+  }, [router])
 
   useEffect(() => {
     // Filter universities based on search query
@@ -92,17 +170,53 @@ export default function UniversitiesPage() {
 
   const formatTuition = (university: University) => {
     if (university.tuition_domestic) {
-      return `$${university.tuition_domestic.toLocaleString()}/year`
+      return `$${university.tuition_domestic.toLocaleString()}`
     }
-    if (university.tuition_international) {
-      return `$${university.tuition_international.toLocaleString()}/year`
-    }
-    return 'Tuition not available'
+    return 'Not available'
   }
 
   const formatAcceptanceRate = (rate: number | undefined) => {
-    if (rate === undefined || rate === null) return 'Not available'
-    return `${rate.toFixed(1)}%`
+    if (rate) {
+      return `${(rate * 100).toFixed(1)}%`
+    }
+    return 'Not available'
+  }
+
+  const formatStudentLife = (studentLife: any) => {
+    if (!studentLife) return null
+    
+    try {
+      const data = typeof studentLife === 'string' ? JSON.parse(studentLife) : studentLife
+      if (typeof data === 'object' && data !== null) {
+        const categories = Object.keys(data)
+        return `${categories.length} categories available`
+      }
+    } catch (e) {
+      // Ignore parsing errors
+    }
+    return null
+  }
+
+  const formatRankings = (university: University) => {
+    const rankings = []
+    if (university.world_ranking) rankings.push(`World: #${university.world_ranking}`)
+    if (university.national_ranking) rankings.push(`National: #${university.national_ranking}`)
+    if (university.regional_ranking) rankings.push(`Regional: #${university.regional_ranking}`)
+    return rankings.length > 0 ? rankings.join(' • ') : 'Not available'
+  }
+
+  const formatPrograms = (programs: any) => {
+    if (!programs) return 'Not available'
+    
+    try {
+      const data = typeof programs === 'string' ? JSON.parse(programs) : programs
+      if (Array.isArray(data)) {
+        return `${data.length} programs available`
+      }
+    } catch (e) {
+      // Ignore parsing errors
+    }
+    return 'Not available'
   }
 
   if (isLoading) {
@@ -194,18 +308,28 @@ export default function UniversitiesPage() {
                       <MapPin className="h-4 w-4 mr-1" />
                       {formatLocation(university)}
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 mb-2">
                       {university.world_ranking && (
                         <Badge variant="outline" className="text-xs">
-                          #{university.world_ranking} World Ranking
+                          #{university.world_ranking} World
                         </Badge>
                       )}
                       {university.national_ranking && (
                         <Badge variant="outline" className="text-xs">
-                          #{university.national_ranking} National Ranking
+                          #{university.national_ranking} National
+                        </Badge>
+                      )}
+                      {university.regional_ranking && (
+                        <Badge variant="outline" className="text-xs">
+                          #{university.regional_ranking} Regional
                         </Badge>
                       )}
                     </div>
+                    {university.type && (
+                      <Badge variant="secondary" className="text-xs">
+                        {university.type}
+                      </Badge>
+                    )}
                   </div>
                   <Button
                     variant="ghost"
@@ -226,7 +350,7 @@ export default function UniversitiesPage() {
               </CardHeader>
               
               <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground line-clamp-2">
                   {university.description || 'No description available'}
                 </p>
                 
@@ -245,29 +369,39 @@ export default function UniversitiesPage() {
                       <span className="font-medium">{university.student_population.toLocaleString()}</span>
                     </div>
                   )}
+                  {university.student_faculty_ratio && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Student-Faculty Ratio:</span>
+                      <span className="font-medium">{university.student_faculty_ratio}:1</span>
+                    </div>
+                  )}
+                  {university.international_students_percentage && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">International Students:</span>
+                      <span className="font-medium">{university.international_students_percentage}%</span>
+                    </div>
+                  )}
                 </div>
 
                 <Separator />
 
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Top Programs:</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {university.programs && university.programs.slice(0, 3).map((program, index) => (
-                      <Badge key={index} variant="secondary" className="text-xs">
-                        {program.name}
-                      </Badge>
-                    ))}
-                    {university.programs && university.programs.length > 3 && (
-                      <Badge variant="secondary" className="text-xs">
-                        +{university.programs.length - 3} more
-                      </Badge>
-                    )}
-                    {(!university.programs || university.programs.length === 0) && (
-                      <Badge variant="secondary" className="text-xs">
-                        Programs not available
-                      </Badge>
-                    )}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Programs:</span>
+                    <span className="font-medium">{formatPrograms(university.programs)}</span>
                   </div>
+                  {formatStudentLife(university.student_life) && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Student Life:</span>
+                      <span className="font-medium">{formatStudentLife(university.student_life)}</span>
+                    </div>
+                  )}
+                  {university.campus_size && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Campus:</span>
+                      <span className="font-medium">{university.campus_size}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex space-x-2 pt-2">

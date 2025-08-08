@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,7 +11,7 @@ import { ArrowLeft, Mail, Lock, User, UserCheck, GraduationCap } from 'lucide-re
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { register } from '@/lib/api'
+import { api } from '@/lib/api'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -25,23 +25,6 @@ export default function RegisterPage() {
     agreeToTerms: true
   })
 
-  console.log('RegisterPage component rendered')
-
-  // Test API connection on component mount
-  useEffect(() => {
-    console.log('RegisterPage useEffect running')
-    const testAPI = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/')
-        const data = await response.json()
-        console.log('API test successful:', data)
-      } catch (error) {
-        console.error('API test failed:', error)
-      }
-    }
-    testAPI()
-  }, [])
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
     setFormData(prev => ({
@@ -50,22 +33,10 @@ export default function RegisterPage() {
     }))
   }
 
-  const testAPIConnection = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/')
-      const data = await response.json()
-      toast.success('API connection successful!')
-      console.log('API test result:', data)
-    } catch (error) {
-      toast.error('API connection failed!')
-      console.error('API test error:', error)
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Form submitted with data:', formData)
     
+    // Client-side validation
     if (formData.password !== formData.confirmPassword) {
       toast.error('Passwords do not match')
       return
@@ -76,26 +47,72 @@ export default function RegisterPage() {
       return
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.email)) {
+      toast.error('Please enter a valid email address')
+      return
+    }
+
+    // Validate password requirements
+    if (formData.password.length < 8) {
+      toast.error('Password must be at least 8 characters long')
+      return
+    }
+
+    if (!/[A-Z]/.test(formData.password)) {
+      toast.error('Password must contain at least one uppercase letter')
+      return
+    }
+
+    if (!/[a-z]/.test(formData.password)) {
+      toast.error('Password must contain at least one lowercase letter')
+      return
+    }
+
+    if (!/\d/.test(formData.password)) {
+      toast.error('Password must contain at least one number')
+      return
+    }
+
+    // Validate username
+    if (formData.username.length < 3) {
+      toast.error('Username must be at least 3 characters long')
+      return
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+      toast.error('Username can only contain letters, numbers, and underscores')
+      return
+    }
+
+    // Validate name
+    if (formData.name.trim().length < 2) {
+      toast.error('Name must be at least 2 characters long')
+      return
+    }
+
     setIsLoading(true)
-    console.log('Starting registration process...')
 
     try {
-      console.log('Calling register API...')
-      const response = await register({
+      const response = await api.register({
         username: formData.username,
         email: formData.email,
         password: formData.password,
         name: formData.name
       })
-      console.log('Register API response:', response)
 
-      if (response.access_token) {
-        toast.success('Registration successful!')
-        // Store token and redirect to questionnaire
-        localStorage.setItem('token', response.access_token)
-        router.push('/questionnaire')
+      toast.success('Registration successful!')
+      
+      // Check if user has completed the questionnaire (new users won't have, but just in case)
+      const userProfile = await api.getProfile()
+      
+      if (userProfile.personality_summary && userProfile.personality_profile) {
+        // User has completed questionnaire, redirect to suggestions
+        router.push('/universities')
       } else {
-        toast.error('Registration failed')
+        // User hasn't completed questionnaire, redirect to questionnaire
+        router.push('/questionnaire')
       }
     } catch (error) {
       console.error('Registration error:', error)
@@ -103,13 +120,7 @@ export default function RegisterPage() {
       // Extract error message
       let errorMessage = 'Registration failed. Please try again.'
       if (error instanceof Error) {
-        if (error.message.includes('Validation error:')) {
-          errorMessage = error.message.replace('Validation error: ', '')
-        } else if (error.message.includes('HTTP error! status: 422')) {
-          errorMessage = 'Please check your input and try again.'
-        } else {
-          errorMessage = error.message
-        }
+        errorMessage = error.message
       }
       
       toast.error(errorMessage)
@@ -142,23 +153,6 @@ export default function RegisterPage() {
           <p className="text-muted-foreground">
             Join thousands of students finding their perfect university match
           </p>
-          {/* Test API Button */}
-          <Button 
-            onClick={testAPIConnection} 
-            variant="outline" 
-            size="sm" 
-            className="mt-4"
-          >
-            Test API Connection
-          </Button>
-          
-          {/* Simple Test Button */}
-          <button 
-            onClick={() => console.log('Simple test button clicked!')}
-            className="mt-2 px-4 py-2 bg-red-500 text-white rounded"
-          >
-            Simple Test Button
-          </button>
         </div>
 
         {/* Registration Form */}
@@ -205,6 +199,9 @@ export default function RegisterPage() {
                     required
                   />
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Username must be at least 3 characters, letters, numbers, and underscores only
+                </p>
               </div>
 
               {/* Email */}
@@ -284,17 +281,13 @@ export default function RegisterPage() {
               </div>
 
               {/* Submit Button */}
-              <button 
-                type="button" 
-                className="w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+              <Button 
+                type="submit" 
+                className="w-full" 
                 disabled={isLoading}
-                onClick={() => {
-                  console.log('Submit button clicked!')
-                  handleSubmit(new Event('submit') as any)
-                }}
               >
                 {isLoading ? 'Creating Account...' : 'Create Account'}
-              </button>
+              </Button>
             </form>
 
             <Separator className="my-6" />

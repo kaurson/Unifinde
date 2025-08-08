@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
 import { 
   ArrowLeft, 
   Brain, 
@@ -177,6 +178,21 @@ export default function SummaryPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* Full Analysis Text */}
+                  {user.personality_profile.analysis && (
+                    <div className="space-y-4">
+                      <Label className="text-sm font-medium text-muted-foreground">Complete Analysis</Label>
+                      <div className="bg-gray-50 p-4 rounded-lg border">
+                        <div className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">
+                          {user.personality_profile.analysis}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <Separator />
+
+                  {/* Structured Data */}
                   <div className="grid gap-4 md:grid-cols-2">
                     {user.personality_profile.personality_type && (
                       <div className="space-y-2">

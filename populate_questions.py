@@ -138,13 +138,11 @@ def display_questions(db: Session):
         print()
 
 def main():
-    print("🔧 Using SQLite database")
     print("🧪 Question Database Population Script")
     print("=" * 50)
     
-    # Create database connection
-    engine = create_engine(DATABASE_URL)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    # Create database connection using the same configuration as the main app
+    from database.database import engine, SessionLocal
     db = SessionLocal()
     
     try:
