@@ -26,6 +26,8 @@ class UserSuggestionsService:
         
         # Create new suggestions
         saved_suggestions = []
+        current_time = datetime.now()
+        
         for suggestion in suggestions:
             # Extract program information if available
             program_id = suggestion.get("program_id")
@@ -45,7 +47,9 @@ class UserSuggestionsService:
                 university_data=suggestion.get("university_data"),
                 program_id=program_id,
                 program_name=program_name,
-                program_data=program_data
+                program_data=program_data,
+                created_at=current_time,
+                updated_at=current_time
             )
             
             db.add(user_suggestion)
@@ -151,6 +155,10 @@ class UserSuggestionsService:
             if confidence:
                 confidence_levels[confidence] = confidence_levels.get(confidence, 0) + 1
         
+        # Calculate last_updated safely, filtering out None values
+        valid_updated_ats = [s.updated_at for s in suggestions if s.updated_at is not None]
+        last_updated = max(valid_updated_ats).isoformat() if valid_updated_ats else None
+        
         return {
             "total_suggestions": len(suggestions),
             "average_score": sum(scores) / len(scores),
@@ -158,5 +166,5 @@ class UserSuggestionsService:
             "lowest_score": min(scores),
             "matching_methods": methods,
             "confidence_levels": confidence_levels,
-            "last_updated": max(s.updated_at for s in suggestions).isoformat() if suggestions else None
+            "last_updated": last_updated
         } 

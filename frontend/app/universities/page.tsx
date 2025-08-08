@@ -73,6 +73,7 @@ export default function UniversitiesPage() {
             
             setUniversities(universityData)
             setFilteredUniversities(universityData)
+            setSuggestionStats(suggestionsResponse.stats)
             toast.success('Your saved university matches loaded successfully!')
             return
           }
@@ -93,6 +94,15 @@ export default function UniversitiesPage() {
         
         setUniversities(universityData)
         setFilteredUniversities(universityData)
+        
+        // Fetch suggestion stats after generating new suggestions
+        try {
+          const suggestionsResponse = await api.getUserSuggestions(20)
+          setSuggestionStats(suggestionsResponse.stats)
+        } catch (statsError) {
+          console.log('Could not fetch suggestion stats:', statsError)
+        }
+        
         toast.success('Your personalized university matches generated and saved successfully!')
       } catch (error) {
         console.error('Error loading universities:', error)
@@ -182,32 +192,86 @@ export default function UniversitiesPage() {
   const handleRegenerateSuggestions = async () => {
     setIsRegenerating(true)
     try {
+      // Show loading toast
+      const loadingToast = toast.loading('Regenerating your university matches...')
+      
+      // Call the regenerate API
       const result = await api.regenerateSuggestions(true, 20)
+      
+      // Dismiss loading toast
+      toast.dismiss(loadingToast)
+      
+      // Show success message
       toast.success(result.message)
       
-      // Reload the page to show new suggestions
-      window.location.reload()
+      // Fetch the new suggestions
+      const suggestionsResponse = await api.getUserSuggestions(20)
+      
+      if (suggestionsResponse.suggestions && suggestionsResponse.suggestions.length > 0) {
+        // Extract university data from saved suggestions
+        const universityData = suggestionsResponse.suggestions
+          .map((suggestion: any) => suggestion.university_data)
+          .filter(Boolean)
+        
+        // Update state with new suggestions
+        setUniversities(universityData)
+        setFilteredUniversities(universityData)
+        
+        // Update suggestion stats
+        setSuggestionStats(suggestionsResponse.stats)
+        
+        console.log('Successfully regenerated and loaded new suggestions:', universityData.length)
+      } else {
+        toast.error('No suggestions were generated. Please try again.')
+      }
     } catch (error) {
       console.error('Error regenerating suggestions:', error)
-      toast.error('Failed to regenerate suggestions. Please try again.')
+      
+      // Handle different types of errors
+      if (error instanceof Error) {
+        if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          toast.error('Please log in to regenerate suggestions')
+          router.push('/login')
+        } else if (error.message.includes('400') || error.message.includes('questionnaire')) {
+          toast.error('Please complete the questionnaire first to get personalized matches')
+          router.push('/questionnaire')
+        } else {
+          toast.error('Failed to regenerate suggestions. Please try again.')
+        }
+      } else {
+        toast.error('Failed to regenerate suggestions. Please try again.')
+      }
     } finally {
       setIsRegenerating(false)
     }
   }
 
   const handleClearSuggestions = async () => {
+    // Add confirmation dialog
+    if (!confirm('Are you sure you want to clear all your university suggestions? This action cannot be undone.')) {
+      return
+    }
+    
     try {
+      // Show loading toast
+      const loadingToast = toast.loading('Clearing suggestions...')
+      
       const result = await api.clearUserSuggestions()
+      
+      // Dismiss loading toast
+      toast.dismiss(loadingToast)
+      
       if (result.cleared) {
         toast.success('Suggestions cleared successfully')
         setUniversities([])
         setFilteredUniversities([])
+        setSuggestionStats(null)
       } else {
         toast.success('No suggestions to clear')
       }
     } catch (error) {
       console.error('Error clearing suggestions:', error)
-      toast.error('Failed to clear suggestions')
+      toast.error('Failed to clear suggestions. Please try again.')
     }
   }
 
@@ -383,6 +447,54 @@ export default function UniversitiesPage() {
             </div>
           </div>
         </div>
+
+        {/* Suggestion Stats Section */}
+        {suggestionStats && (
+          <div className="mb-6">
+            <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {suggestionStats.total_suggestions || universities.length}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Total Matches</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {suggestionStats.average_score ? `${(suggestionStats.average_score * 100).toFixed(1)}%` : 'N/A'}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Avg. Match Score</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {suggestionStats.highest_score ? `${(suggestionStats.highest_score * 100).toFixed(1)}%` : 'N/A'}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Best Match</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {suggestionStats.last_updated ? new Date(suggestionStats.last_updated).toLocaleDateString() : 'N/A'}
+                    </div>
+                    <div className="text-sm text-muted-foreground">Last Updated</div>
+                  </div>
+                </div>
+                {suggestionStats.matching_methods && Object.keys(suggestionStats.matching_methods).length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-blue-200">
+                    <div className="text-sm text-muted-foreground mb-2">Matching Methods Used:</div>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(suggestionStats.matching_methods).map(([method, count]) => (
+                        <Badge key={method} variant="outline" className="text-xs">
+                          {method}: {String(count)}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Results Summary */}
         <div className="mb-6">

@@ -265,32 +265,63 @@ async def update_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update user profile"""
-    for field, value in profile_data.dict(exclude_unset=True).items():
-        setattr(current_user, field, value)
-    
-    db.commit()
-    db.refresh(current_user)
-    
-    return UserProfile(
-        id=str(current_user.id),
-        username=current_user.username,
-        email=current_user.email,
-        name=current_user.name,
-        age=current_user.age,
-        phone=current_user.phone,
-        income=current_user.income,
-        personality_profile=current_user.personality_profile,
-        personality_summary=current_user.personality_summary,
-        questionnaire_answers=current_user.questionnaire_answers,
-        preferred_majors=current_user.preferred_majors,
-        preferred_locations=current_user.preferred_locations,
-        min_acceptance_rate=current_user.min_acceptance_rate,
-        max_tuition=current_user.max_tuition,
-        preferred_university_type=current_user.preferred_university_type,
-        created_at=current_user.created_at,
-        updated_at=current_user.updated_at
-    )
+    """Update user profile and invalidate cached vectors"""
+    try:
+        # Update basic profile fields
+        if profile_data.name is not None:
+            current_user.name = profile_data.name
+        if profile_data.age is not None:
+            current_user.age = profile_data.age
+        if profile_data.phone is not None:
+            current_user.phone = profile_data.phone
+        if profile_data.income is not None:
+            current_user.income = profile_data.income
+        if profile_data.preferred_majors is not None:
+            current_user.preferred_majors = profile_data.preferred_majors
+        if profile_data.preferred_locations is not None:
+            current_user.preferred_locations = profile_data.preferred_locations
+        if profile_data.min_acceptance_rate is not None:
+            current_user.min_acceptance_rate = profile_data.min_acceptance_rate
+        if profile_data.max_tuition is not None:
+            current_user.max_tuition = profile_data.max_tuition
+        if profile_data.preferred_university_type is not None:
+            current_user.preferred_university_type = profile_data.preferred_university_type
+        
+        # Update student profile if provided
+        if profile_data.student_profile is not None:
+            if not current_user.student_profile:
+                # Create new student profile
+                student_profile = StudentProfile(user_id=current_user.id)
+                db.add(student_profile)
+                db.commit()
+                db.refresh(student_profile)
+                current_user.student_profile = student_profile
+            
+            # Update student profile fields
+            student_profile = current_user.student_profile
+            for field, value in profile_data.student_profile.dict(exclude_unset=True).items():
+                if hasattr(student_profile, field):
+                    setattr(student_profile, field, value)
+        
+        db.commit()
+        db.refresh(current_user)
+        
+        # Invalidate user vector since profile has changed
+        try:
+            vector_service = VectorMatchingService()
+            await vector_service.invalidate_user_vector(current_user.id, db)
+        except Exception as e:
+            # Log the error but don't fail the profile update
+            print(f"Warning: Failed to invalidate user vector: {e}")
+        
+        return current_user
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update profile: {str(e)}"
+        )
 
 # Questionnaire endpoints
 @app.get("/questions", response_model=List[QuestionResponse])
@@ -926,6 +957,182 @@ async def clear_matching_cache(current_user: User = Depends(get_current_user)):
     matching_service = MatchingService()
     matching_service.clear_vector_cache()
     return {"message": "Vector matching cache cleared successfully"}
+
+# New vector storage management endpoints
+@app.get("/vectors/statistics")
+async def get_vector_statistics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get statistics about stored vectors and vector storage performance"""
+    try:
+        vector_service = VectorMatchingService()
+        stats = await vector_service.get_vector_statistics(db)
+        performance_metrics = await vector_service.get_vector_performance_metrics(db)
+        
+        return {
+            "vector_statistics": stats,
+            "performance_metrics": performance_metrics
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get vector statistics: {str(e)}"
+        )
+
+@app.post("/vectors/optimize")
+async def optimize_vector_storage(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Optimize vector storage by cleaning up invalid vectors and regenerating as needed"""
+    try:
+        vector_service = VectorMatchingService()
+        optimization_results = await vector_service.optimize_vector_storage(db)
+        
+        return {
+            "message": "Vector storage optimization completed",
+            "optimization_results": optimization_results
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to optimize vector storage: {str(e)}"
+        )
+
+@app.post("/vectors/generate-batch")
+async def generate_batch_vectors(
+    vector_type: str = "university",  # "university" or "user"
+    batch_size: int = 10,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate vectors in batch for universities or users that don't have them"""
+    try:
+        vector_service = VectorMatchingService()
+        
+        if vector_type == "university":
+            await vector_service.batch_generate_university_vectors(db, batch_size)
+            message = f"Generated vectors for up to {batch_size} universities"
+        elif vector_type == "user":
+            await vector_service.batch_generate_user_vectors(db, batch_size)
+            message = f"Generated vectors for up to {batch_size} users"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="vector_type must be 'university' or 'user'"
+            )
+        
+        return {"message": message}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate batch vectors: {str(e)}"
+        )
+
+@app.post("/vectors/invalidate-user")
+async def invalidate_user_vector(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Invalidate and regenerate user vector when profile changes"""
+    try:
+        vector_service = VectorMatchingService()
+        await vector_service.invalidate_user_vector(current_user.id, db)
+        
+        return {"message": "User vector invalidated and will be regenerated on next use"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to invalidate user vector: {str(e)}"
+        )
+
+@app.post("/vectors/cleanup-cache")
+async def cleanup_expired_cache(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Clean up expired cache entries"""
+    try:
+        vector_service = VectorMatchingService()
+        await vector_service.cleanup_expired_cache(db)
+        
+        return {"message": "Expired cache entries cleaned up successfully"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cleanup cache: {str(e)}"
+        )
+
+@app.post("/matches/generate-with-cache")
+async def generate_matches_with_cache(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate matches using vector storage with caching to avoid redundant computations"""
+    if not current_user.personality_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete the questionnaire first"
+        )
+    
+    vector_service = VectorMatchingService()
+    
+    try:
+        matches = await vector_service.find_matches_with_cache(current_user, db, limit)
+        
+        return {
+            "message": f"Generated {len(matches)} matches using vector storage with caching",
+            "matches": matches,
+            "matching_method": "vector_similarity_with_caching"
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate matches: {str(e)}"
+        )
+
+@app.post("/matches/collection/generate-with-cache")
+async def generate_collection_matches_with_cache(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate collection matches using vector storage with caching"""
+    if not current_user.personality_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete the questionnaire first"
+        )
+    
+    vector_service = VectorMatchingService()
+    
+    try:
+        # Check if collection vectors exist
+        collection_vectors_count = db.query(CollectionResultVector).count()
+        
+        if collection_vectors_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No collection vectors found. Please generate collection vectors first."
+            )
+        
+        matches = await vector_service.find_collection_matches_with_cache(current_user, db, limit)
+        
+        return {
+            "message": f"Generated {len(matches)} collection matches using vector storage with caching",
+            "matches": matches,
+            "matching_method": "collection_vector_similarity_with_caching",
+            "total_collection_vectors": collection_vectors_count
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate collection matches: {str(e)}"
+        )
 
 @app.post("/matches/collection/generate")
 async def generate_collection_matches(

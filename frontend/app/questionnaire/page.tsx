@@ -133,62 +133,61 @@ export default function QuestionnairePage() {
     setIsSubmitting(true)
     
     try {
-      // Check authentication before submitting
-      const isAuth = await api.isAuthenticated()
-      if (!isAuth) {
-        toast.error('Please login to submit the questionnaire')
-        router.push('/login')
-        return
-      }
-
-      // Get actual questions to generate proper sample answers
-      const questionsData = await api.getQuestions()
+      // Generate random answers for all questions and populate local state
+      const randomAnswers: Record<string, any> = {}
       
-      // Generate sample answers based on question types
-      const sampleAnswers = questionsData.map(question => {
-        let sampleAnswer = ''
+      questions.forEach(question => {
+        let randomAnswer: any = ''
+        
         switch (question.question_type) {
           case 'boolean':
-            sampleAnswer = Math.random() > 0.5 ? 'true' : 'false'
+            randomAnswer = Math.random() > 0.5 ? true : false
             break
           case 'integer':
-            sampleAnswer = Math.floor(Math.random() * 10).toString()
+            randomAnswer = Math.floor(Math.random() * 10)
             break
           case 'float':
-            sampleAnswer = (Math.random() * 10).toFixed(2)
+            randomAnswer = parseFloat((Math.random() * 10).toFixed(2))
             break
           case 'scale_0_10':
-            sampleAnswer = Math.floor(Math.random() * 11).toString()
+            randomAnswer = Math.floor(Math.random() * 11)
             break
           case 'multiple_choice_3':
-            sampleAnswer = ['Option A', 'Option B', 'Option C'][Math.floor(Math.random() * 3)]
+            randomAnswer = ['Option A', 'Option B', 'Option C'][Math.floor(Math.random() * 3)]
             break
           case 'multiple_choice_5':
-            sampleAnswer = ['Option A', 'Option B', 'Option C', 'Option D', 'Option E'][Math.floor(Math.random() * 5)]
+            randomAnswer = ['Option A', 'Option B', 'Option C', 'Option D', 'Option E'][Math.floor(Math.random() * 5)]
+            break
+          case 'text':
+            const textOptions = [
+              'I enjoy learning new things',
+              'I prefer working in teams',
+              'I like to solve complex problems',
+              'I am very organized',
+              'I enjoy creative activities',
+              'I prefer structured environments',
+              'I like to take leadership roles',
+              'I enjoy research and analysis'
+            ]
+            randomAnswer = textOptions[Math.floor(Math.random() * textOptions.length)]
             break
           default:
-            sampleAnswer = 'Sample answer for testing purposes'
+            randomAnswer = 'Random answer for testing purposes'
         }
-        return {
-          question_id: question.id,
-          answer_text: sampleAnswer,
-          answer_data: { value: sampleAnswer }
-        }
+        
+        randomAnswers[question.id] = randomAnswer
       })
-
-      const submissionData = {
-        answers: sampleAnswers,
-        preferred_majors: ['Computer Science', 'Engineering', 'Business'],
-        preferred_locations: ['United States', 'Canada', 'United Kingdom']
-      }
-
-      await api.submitQuestionnaire(submissionData)
-      const userProfile = await api.getProfile() // Get current user profile to get the ID
-      toast.success('Sample questionnaire submitted! Redirecting to your summary...')
-      router.push(`/summary/${userProfile.id}`) // Redirect to summary page
+      
+      // Update the answers state with random values
+      setAnswers(randomAnswers)
+      
+      // Move to the last question to show completion
+      setCurrentQuestion(questions.length - 1)
+      
+      toast.success('Random answers generated! You can review and submit them.')
     } catch (error) {
-      console.error('Error submitting sample questionnaire:', error)
-      toast.error('Failed to submit sample questionnaire. Please try again.')
+      console.error('Error generating random answers:', error)
+      toast.error('Failed to generate random answers. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -249,7 +248,7 @@ export default function QuestionnairePage() {
             Answer a few questions to help us find your perfect university match
           </p>
           
-          {/* Skip Questionnaire Button for Testing */}
+          {/* Generate Random Answers Button for Testing */}
           <div className="mt-4">
             <Button
               variant="outline"
@@ -261,10 +260,10 @@ export default function QuestionnairePage() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  Submitting...
+                  Generating...
                 </>
               ) : (
-                '🚀 Skip Questionnaire (Testing)'
+                '🎲 Generate Random Answers (Testing)'
               )}
             </Button>
           </div>
