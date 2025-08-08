@@ -718,16 +718,16 @@ class CollectionResultVector(Base):
         return f'<CollectionResultVector {self.collection_result_id}>'
     
     def get_embedding_array(self) -> np.ndarray:
-        """Convert stored bytes back to numpy array"""
+        """Get embedding as numpy array"""
         return np.frombuffer(self.embedding, dtype=np.float32)
     
     def set_embedding_array(self, embedding_array: np.ndarray) -> None:
-        """Convert numpy array to bytes for storage"""
+        """Set embedding from numpy array"""
         self.embedding = embedding_array.tobytes()
         self.embedding_dimension = len(embedding_array)
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert collection result vector object to dictionary"""
+        """Convert vector object to dictionary"""
         return {
             'id': str(self.id),
             'collection_result_id': str(self.collection_result_id),
@@ -735,6 +735,61 @@ class CollectionResultVector(Base):
             'embedding_model': self.embedding_model,
             'source_text': self.source_text,
             'specialized_data': self.specialized_data,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class UserUniversitySuggestion(Base):
+    """Model for storing university suggestions for each user to avoid duplicate generation"""
+    __tablename__ = 'user_university_suggestions'
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
+    
+    # Suggestion data
+    university_id = Column(String(36), nullable=False)  # Can be from University or UniversityDataCollectionResult
+    university_name = Column(String(200), nullable=False)
+    similarity_score = Column(Float, nullable=False)
+    matching_method = Column(String(50), nullable=False)  # vector_similarity, traditional_scoring, collection_vector_similarity
+    confidence = Column(String(20), nullable=True)  # high, medium, low, very_low
+    
+    # Match details
+    match_reasons = Column(JSON, nullable=True)  # List of reasons why this university matches
+    user_preferences = Column(JSON, nullable=True)  # User preferences used for matching
+    university_data = Column(JSON, nullable=True)  # Full university data
+    
+    # Program information (if applicable)
+    program_id = Column(String(36), nullable=True)
+    program_name = Column(String(200), nullable=True)
+    program_data = Column(JSON, nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", backref="university_suggestions")
+    
+    def __repr__(self) -> str:
+        return f'<UserUniversitySuggestion {self.user_id} -> {self.university_name}>'
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert suggestion object to dictionary"""
+        return {
+            'id': str(self.id),
+            'user_id': str(self.user_id),
+            'university_id': self.university_id,
+            'university_name': self.university_name,
+            'similarity_score': self.similarity_score,
+            'matching_method': self.matching_method,
+            'confidence': self.confidence,
+            'match_reasons': self.match_reasons,
+            'user_preferences': self.user_preferences,
+            'university_data': self.university_data,
+            'program_id': self.program_id,
+            'program_name': self.program_name,
+            'program_data': self.program_data,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

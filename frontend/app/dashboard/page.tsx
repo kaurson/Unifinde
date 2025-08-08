@@ -52,8 +52,10 @@ export default function DashboardPage() {
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <GraduationCap className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold gradient-text">UniMatch</span>
+            <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+              <GraduationCap className="h-8 w-8 text-primary" />
+              <span className="text-xl font-bold gradient-text">UniFinder</span>
+            </Link>
           </div>
           <div className="flex items-center space-x-4">
             <span className="text-sm text-muted-foreground">
@@ -83,14 +85,14 @@ export default function DashboardPage() {
             <Card className="hover:shadow-lg transition-shadow cursor-pointer">
               <CardHeader className="text-center">
                 <BookOpen className="h-8 w-8 text-primary mx-auto mb-2" />
-                <CardTitle className="text-lg">Browse Universities</CardTitle>
+                <CardTitle className="text-lg">Browse All Universities</CardTitle>
               </CardHeader>
               <CardContent className="text-center">
                 <p className="text-sm text-muted-foreground mb-4">
-                  Explore universities and programs
+                  Explore all universities and programs
                 </p>
-                <Link href="/universities">
-                  <Button className="w-full">Explore</Button>
+                <Link href="/browse">
+                  <Button className="w-full">Browse</Button>
                 </Link>
               </CardContent>
             </Card>
@@ -98,14 +100,14 @@ export default function DashboardPage() {
             <Card className="hover:shadow-lg transition-shadow cursor-pointer">
               <CardHeader className="text-center">
                 <Target className="h-8 w-8 text-primary mx-auto mb-2" />
-                <CardTitle className="text-lg">Get Matches</CardTitle>
+                <CardTitle className="text-lg">My Matches</CardTitle>
               </CardHeader>
               <CardContent className="text-center">
                 <p className="text-sm text-muted-foreground mb-4">
-                  Find your perfect university match
+                  View your personalized university matches
                 </p>
-                <Link href="/questionnaire">
-                  <Button className="w-full">Start Questionnaire</Button>
+                <Link href="/universities">
+                  <Button className="w-full">View Matches</Button>
                 </Link>
               </CardContent>
             </Card>
@@ -156,7 +158,7 @@ export default function DashboardPage() {
                   <div className="flex-1">
                     <p className="font-medium">Account Created</p>
                     <p className="text-sm text-muted-foreground">
-                      Welcome to UniMatch! Complete your profile to get started.
+                      Welcome to UniFinder! Complete your profile to get started.
                     </p>
                   </div>
                   <span className="text-xs text-muted-foreground">Just now</span>

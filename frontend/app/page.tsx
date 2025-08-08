@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
+import { Logo } from '@/components/ui/logo'
 import { 
   GraduationCap, 
   Search, 
@@ -96,10 +97,12 @@ export default function HomePage() {
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <GraduationCap className="h-8 w-8 text-primary" />
-            <span className="text-xl font-bold gradient-text">UniMatch</span>
+            <Logo />
           </div>
           <nav className="hidden md:flex items-center space-x-6">
+            <Link href="/browse" className="text-muted-foreground hover:text-foreground transition-colors">
+              Browse Universities
+            </Link>
             <Link href="#features" className="text-muted-foreground hover:text-foreground transition-colors">
               Features
             </Link>
@@ -183,7 +186,7 @@ export default function HomePage() {
       {/* Features Section */}
       <section id="features" className="container mx-auto px-4 py-20">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Why Choose UniMatch?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Why Choose UniFinder?</h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Our AI-powered platform revolutionizes how students find their perfect university match.
           </p>
@@ -256,7 +259,7 @@ export default function HomePage() {
               Ready to Find Your Perfect Match?
             </h2>
             <p className="text-xl mb-8 opacity-90 max-w-2xl mx-auto">
-              Join thousands of students who have already discovered their ideal university with UniMatch.
+              Join thousands of students who have already discovered their ideal university with UniFinder.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" variant="secondary" onClick={handleStartJourney} disabled={isCheckingAuth}>
@@ -277,8 +280,7 @@ export default function HomePage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center space-x-2 mb-4">
-                <GraduationCap className="h-6 w-6 text-primary" />
-                <span className="text-lg font-bold">UniMatch</span>
+                <Logo size="md" showText={true} />
               </div>
               <p className="text-muted-foreground">
                 AI-powered university matching for students worldwide.
@@ -316,7 +318,7 @@ export default function HomePage() {
           <Separator className="my-8" />
           
           <div className="text-center text-muted-foreground">
-            <p>&copy; 2024 UniMatch. All rights reserved.</p>
+            <p>&copy; 2024 UniFinder. All rights reserved.</p>
           </div>
         </div>
       </footer>

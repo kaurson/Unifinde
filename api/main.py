@@ -6,6 +6,8 @@ import bcrypt
 import sys
 import os
 from dotenv import load_dotenv
+from sqlalchemy import or_
+import json
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +29,7 @@ from api.matching import MatchingService
 from api.enhanced_matching import EnhancedMatchingService
 from api.questionnaire import QuestionnaireService
 from api.vector_matcher import VectorMatchingService
+from api.user_suggestions import UserSuggestionsService
 from database.models import CollectionResultVector
 # from api.school_scraper import SchoolScraperService
 # from api.university_data_collection import router as university_data_router
@@ -552,6 +555,167 @@ async def get_universities(
         ) for university in universities
     ]
 
+@app.get("/browse-universities")
+async def browse_universities(
+    skip: int = 0,
+    limit: int = 100,
+    search: Optional[str] = None,
+    country: Optional[str] = None,
+    state: Optional[str] = None,
+    type: Optional[str] = None,
+    has_ranking: Optional[bool] = None,
+    has_programs: Optional[bool] = None,
+    min_acceptance_rate: Optional[float] = None,
+    max_acceptance_rate: Optional[float] = None,
+    min_tuition: Optional[float] = None,
+    max_tuition: Optional[float] = None,
+    min_student_population: Optional[int] = None,
+    max_student_population: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Browse all universities from collection results with comprehensive filtering"""
+    from database.models import UniversityDataCollectionResult
+    
+    # Start with base query
+    query = db.query(UniversityDataCollectionResult)
+    
+    # Apply filters
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                UniversityDataCollectionResult.name.ilike(search_term),
+                UniversityDataCollectionResult.city.ilike(search_term),
+                UniversityDataCollectionResult.state.ilike(search_term),
+                UniversityDataCollectionResult.country.ilike(search_term),
+                UniversityDataCollectionResult.description.ilike(search_term)
+            )
+        )
+    
+    if country:
+        query = query.filter(UniversityDataCollectionResult.country.ilike(f"%{country}%"))
+    
+    if state:
+        query = query.filter(UniversityDataCollectionResult.state.ilike(f"%{state}%"))
+    
+    if type:
+        query = query.filter(UniversityDataCollectionResult.type.ilike(f"%{type}%"))
+    
+    if has_ranking:
+        query = query.filter(
+            or_(
+                UniversityDataCollectionResult.world_ranking.isnot(None),
+                UniversityDataCollectionResult.national_ranking.isnot(None),
+                UniversityDataCollectionResult.regional_ranking.isnot(None)
+            )
+        )
+    
+    if has_programs:
+        query = query.filter(UniversityDataCollectionResult.programs.isnot(None))
+    
+    if min_acceptance_rate is not None:
+        query = query.filter(UniversityDataCollectionResult.acceptance_rate >= min_acceptance_rate)
+    
+    if max_acceptance_rate is not None:
+        query = query.filter(UniversityDataCollectionResult.acceptance_rate <= max_acceptance_rate)
+    
+    if min_tuition is not None:
+        query = query.filter(UniversityDataCollectionResult.tuition_domestic >= min_tuition)
+    
+    if max_tuition is not None:
+        query = query.filter(UniversityDataCollectionResult.tuition_domestic <= max_tuition)
+    
+    if min_student_population is not None:
+        query = query.filter(UniversityDataCollectionResult.student_population >= min_student_population)
+    
+    if max_student_population is not None:
+        query = query.filter(UniversityDataCollectionResult.student_population <= max_student_population)
+    
+    # Get total count for pagination
+    total_count = query.count()
+    
+    # Apply pagination
+    universities = query.offset(skip).limit(limit).all()
+    
+    # Convert to response format
+    results = []
+    for university in universities:
+        # Parse JSON fields safely
+        programs = None
+        student_life = None
+        subject_rankings = None
+        
+        try:
+            if university.programs:
+                programs = json.loads(university.programs) if isinstance(university.programs, str) else university.programs
+        except:
+            programs = None
+            
+        try:
+            if university.student_life:
+                student_life = json.loads(university.student_life) if isinstance(university.student_life, str) else university.student_life
+        except:
+            student_life = None
+            
+        try:
+            if university.subject_rankings:
+                subject_rankings = json.loads(university.subject_rankings) if isinstance(university.subject_rankings, str) else university.subject_rankings
+        except:
+            subject_rankings = None
+        
+        results.append({
+            "id": str(university.id),
+            "name": university.name,
+            "website": university.website,
+            "country": university.country,
+            "city": university.city,
+            "state": university.state,
+            "phone": university.phone,
+            "email": university.email,
+            "founded_year": university.founded_year,
+            "type": university.type,
+            "student_population": university.student_population,
+            "undergraduate_population": university.undergraduate_population,
+            "graduate_population": university.graduate_population,
+            "faculty_count": university.faculty_count,
+            "student_faculty_ratio": university.student_faculty_ratio,
+            "acceptance_rate": university.acceptance_rate,
+            "tuition_domestic": university.tuition_domestic,
+            "tuition_international": university.tuition_international,
+            "room_and_board": university.room_and_board,
+            "total_cost_of_attendance": university.total_cost_of_attendance,
+            "financial_aid_available": university.financial_aid_available,
+            "average_financial_aid_package": university.average_financial_aid_package,
+            "scholarships_available": university.scholarships_available,
+            "world_ranking": university.world_ranking,
+            "national_ranking": university.national_ranking,
+            "regional_ranking": university.regional_ranking,
+            "subject_rankings": subject_rankings,
+            "description": university.description,
+            "mission_statement": university.mission_statement,
+            "vision_statement": university.vision_statement,
+            "campus_size": university.campus_size,
+            "campus_type": university.campus_type,
+            "climate": university.climate,
+            "timezone": university.timezone,
+            "international_students_percentage": university.international_students_percentage,
+            "programs": programs,
+            "student_life": student_life,
+            "confidence_score": university.confidence_score,
+            "source_urls": university.source_urls,
+            "last_updated": university.last_updated,
+            "created_at": university.created_at.isoformat() if university.created_at else None,
+            "updated_at": university.updated_at.isoformat() if university.updated_at else None
+        })
+    
+    return {
+        "universities": results,
+        "total_count": total_count,
+        "skip": skip,
+        "limit": limit,
+        "has_more": skip + limit < total_count
+    }
+
 @app.get("/universities/{university_id}", response_model=UniversityResponse)
 async def get_university(university_id: str, db: Session = Depends(get_db)):
     """Get a specific university by ID"""
@@ -776,6 +940,8 @@ async def generate_collection_matches(
             detail="Please complete the questionnaire first"
         )
     
+    suggestions_service = UserSuggestionsService()
+    
     try:
         # Check if collection vectors exist
         collection_vectors_count = db.query(CollectionResultVector).count()
@@ -798,11 +964,15 @@ async def generate_collection_matches(
         
         print(f"Generated {len(matches)} matches")
         
+        # Save suggestions to database
+        suggestions_service.save_suggestions(current_user, matches, db)
+        
         return {
             "message": f"Generated {len(matches)} matches using collection result vectors",
             "matches": matches,
             "matching_method": "collection_vector_similarity",
-            "total_vectors_available": collection_vectors_count
+            "total_vectors_available": collection_vectors_count,
+            "suggestions_saved": True
         }
     
     except HTTPException:
@@ -835,6 +1005,7 @@ async def generate_enhanced_matches(
         )
     
     enhanced_matching_service = EnhancedMatchingService()
+    suggestions_service = UserSuggestionsService()
     
     try:
         matches = await enhanced_matching_service.generate_enhanced_matches(
@@ -868,24 +1039,137 @@ async def generate_enhanced_matches(
             }
             match_dicts.append(match_dict)
         
+        # Save suggestions to database
+        suggestions_service.save_suggestions(current_user, match_dicts, db)
+        
         return {
-            "message": f"Generated {len(matches)} enhanced matches using {'vector similarity' if use_vector_matching else 'traditional scoring'}",
+            "message": f"Generated {len(match_dicts)} enhanced matches using {'vector similarity' if use_vector_matching else 'traditional scoring'}",
             "matches": match_dicts,
             "matching_method": "vector_similarity" if use_vector_matching else "traditional_scoring",
-            "total_matches": len(matches),
-            "match_breakdown": {
-                "perfect": len([m for m in matches if m.match_type.value == "perfect"]),
-                "excellent": len([m for m in matches if m.match_type.value == "excellent"]),
-                "good": len([m for m in matches if m.match_type.value == "good"]),
-                "fair": len([m for m in matches if m.match_type.value == "fair"]),
-                "poor": len([m for m in matches if m.match_type.value == "poor"])
-            }
+            "suggestions_saved": True
         }
     
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate enhanced matches: {str(e)}"
+        )
+
+
+# User Suggestions endpoints
+@app.get("/suggestions")
+async def get_user_suggestions(
+    limit: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get saved university suggestions for the current user"""
+    suggestions_service = UserSuggestionsService()
+    
+    try:
+        suggestions = suggestions_service.get_user_suggestions(current_user, db, limit)
+        stats = suggestions_service.get_suggestion_stats(current_user, db)
+        
+        return {
+            "suggestions": suggestions,
+            "stats": stats,
+            "total_count": len(suggestions)
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve suggestions: {str(e)}"
+        )
+
+
+@app.post("/suggestions/clear")
+async def clear_user_suggestions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Clear all saved suggestions for the current user"""
+    suggestions_service = UserSuggestionsService()
+    
+    try:
+        cleared = suggestions_service.clear_suggestions(current_user, db)
+        
+        return {
+            "message": "Suggestions cleared successfully" if cleared else "No suggestions to clear",
+            "cleared": cleared
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to clear suggestions: {str(e)}"
+        )
+
+
+@app.get("/suggestions/stats")
+async def get_suggestion_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get statistics about user's suggestions"""
+    suggestions_service = UserSuggestionsService()
+    
+    try:
+        stats = suggestions_service.get_suggestion_stats(current_user, db)
+        
+        return {
+            "stats": stats,
+            "has_suggestions": suggestions_service.has_suggestions(current_user, db)
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve suggestion stats: {str(e)}"
+        )
+
+
+@app.post("/suggestions/regenerate")
+async def regenerate_suggestions(
+    use_vector_matching: bool = True,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Regenerate university suggestions for the current user"""
+    if not current_user.personality_profile:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete the questionnaire first"
+        )
+    
+    suggestions_service = UserSuggestionsService()
+    
+    try:
+        # Clear existing suggestions
+        suggestions_service.clear_suggestions(current_user, db)
+        
+        # Generate new suggestions using collection matches (most comprehensive)
+        vector_matcher = VectorMatchingService()
+        matches = await vector_matcher.find_collection_matches(
+            current_user, 
+            db, 
+            limit=limit
+        )
+        
+        # Save new suggestions
+        suggestions_service.save_suggestions(current_user, matches, db)
+        
+        return {
+            "message": f"Regenerated {len(matches)} suggestions",
+            "suggestions_count": len(matches),
+            "matching_method": "collection_vector_similarity"
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to regenerate suggestions: {str(e)}"
         )
 
 @app.get("/matches/enhanced/analysis")

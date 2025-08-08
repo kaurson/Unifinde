@@ -16,7 +16,9 @@ import {
   DollarSign,
   Filter,
   Heart,
-  ExternalLink
+  ExternalLink,
+  RefreshCw,
+  Trash2
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -24,73 +26,62 @@ import toast from 'react-hot-toast'
 import { api, University } from '@/lib/api'
 
 export default function UniversitiesPage() {
+  const router = useRouter()
   const [universities, setUniversities] = useState<University[]>([])
   const [filteredUniversities, setFilteredUniversities] = useState<University[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [suggestionStats, setSuggestionStats] = useState<any>(null)
+  const [isRegenerating, setIsRegenerating] = useState(false)
   const [favorites, setFavorites] = useState<string[]>([])
-  const router = useRouter()
   const isLoadingRef = useRef(false)
 
   useEffect(() => {
     // Check authentication and load universities
     const checkAuthAndLoadUniversities = async () => {
-      // Prevent double requests
-      if (isLoadingRef.current) return
-      
-      isLoadingRef.current = true
-      setIsLoading(true)
+      if (isLoadingRef.current) return;
+      isLoadingRef.current = true;
+      setIsLoading(true);
+
       try {
-        console.log('Checking authentication...')
-        // First check if user is authenticated
-        const isAuth = await api.isAuthenticated()
-        console.log('Authentication status:', isAuth)
-        
+        // Check if user is authenticated
+        const isAuth = await api.isAuthenticated();
         if (!isAuth) {
           toast.error('Please log in to view your university matches')
           router.push('/login')
           return
         }
 
-        // Test authentication with more details
-        try {
-          const authTest = await api.testAuth()
-          console.log('Auth test result:', authTest)
-        } catch (authError) {
-          console.error('Auth test failed:', authError)
-          toast.error('Authentication failed. Please log in again.')
-          router.push('/login')
-          return
-        }
-
-        // Check vectors status
-        try {
-          const vectorsStatus = await api.checkVectorsStatus()
-          console.log('Vectors status:', vectorsStatus)
-          
-          if (!vectorsStatus.vectors_generated) {
-            toast.error('University vectors are not ready. Please try again later.')
-            return
-          }
-        } catch (vectorsError) {
-          console.error('Vectors status check failed:', vectorsError)
-          toast.error('Unable to check vectors status. Please try again later.')
-          return
-        }
-
-        console.log('Getting user profile...')
         // Check if user has completed questionnaire
         const userProfile = await api.getProfile()
-        console.log('User profile:', userProfile)
-        
-        if (!userProfile.personality_profile) {
+        if (!userProfile.personality_summary || !userProfile.personality_profile) {
           toast.error('Please complete the questionnaire first to get personalized matches')
           router.push('/questionnaire')
           return
         }
 
-        console.log('Generating collection matches...')
-        // Use the new collection-based matching system
+        // First, check if user has saved suggestions
+        try {
+          const suggestionsResponse = await api.getUserSuggestions(20)
+          if (suggestionsResponse.suggestions && suggestionsResponse.suggestions.length > 0) {
+            console.log('Found saved suggestions:', suggestionsResponse.suggestions.length)
+            
+            // Extract university data from saved suggestions
+            const universityData = suggestionsResponse.suggestions
+              .map((suggestion: any) => suggestion.university_data)
+              .filter(Boolean)
+            
+            setUniversities(universityData)
+            setFilteredUniversities(universityData)
+            toast.success('Your saved university matches loaded successfully!')
+            return
+          }
+        } catch (suggestionError) {
+          console.log('No saved suggestions found, will generate new ones')
+        }
+
+        // If no saved suggestions, generate new ones
+        console.log('Generating new collection matches...')
         const matchesResponse = await api.generateCollectionMatches(20)
         console.log('Matches response:', matchesResponse)
         
@@ -102,7 +93,7 @@ export default function UniversitiesPage() {
         
         setUniversities(universityData)
         setFilteredUniversities(universityData)
-        toast.success('Your personalized university matches loaded successfully!')
+        toast.success('Your personalized university matches generated and saved successfully!')
       } catch (error) {
         console.error('Error loading universities:', error)
         
@@ -129,18 +120,49 @@ export default function UniversitiesPage() {
     checkAuthAndLoadUniversities()
   }, [router])
 
+  // Filter universities based on search query
   useEffect(() => {
-    // Filter universities based on search query
-    const filtered = universities.filter(uni =>
-      uni.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (uni.city && uni.city.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (uni.state && uni.state.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (uni.country && uni.country.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (uni.programs && uni.programs.some(program => 
-        program.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (program.field && program.field.toLowerCase().includes(searchQuery.toLowerCase()))
-      ))
-    )
+    if (!searchQuery.trim()) {
+      setFilteredUniversities(universities)
+      return
+    }
+
+    const filtered = universities.filter(uni => {
+      const query = searchQuery.toLowerCase()
+      
+      // Helper function to safely check programs
+      const checkPrograms = (programs: any) => {
+        if (!programs) return false
+        
+        // Convert to array if it's a string or object
+        let programsArray = programs
+        if (typeof programs === 'string') {
+          try {
+            programsArray = JSON.parse(programs)
+          } catch {
+            return false
+          }
+        }
+        
+        if (!Array.isArray(programsArray)) {
+          return false
+        }
+        
+        return programsArray.some((program: any) => 
+          program.name && program.name.toLowerCase().includes(query) ||
+          (program.field && program.field.toLowerCase().includes(query))
+        )
+      }
+
+      return (
+        (uni.name && uni.name.toLowerCase().includes(query)) ||
+        (uni.city && uni.city.toLowerCase().includes(query)) ||
+        (uni.state && uni.state.toLowerCase().includes(query)) ||
+        (uni.country && uni.country.toLowerCase().includes(query)) ||
+        checkPrograms(uni.programs)
+      )
+    })
+
     setFilteredUniversities(filtered)
   }, [searchQuery, universities])
 
@@ -153,7 +175,40 @@ export default function UniversitiesPage() {
   }
 
   const handleUniversityClick = (universityId: string) => {
+    // Navigate to university detail page
     router.push(`/universities/${universityId}`)
+  }
+
+  const handleRegenerateSuggestions = async () => {
+    setIsRegenerating(true)
+    try {
+      const result = await api.regenerateSuggestions(true, 20)
+      toast.success(result.message)
+      
+      // Reload the page to show new suggestions
+      window.location.reload()
+    } catch (error) {
+      console.error('Error regenerating suggestions:', error)
+      toast.error('Failed to regenerate suggestions. Please try again.')
+    } finally {
+      setIsRegenerating(false)
+    }
+  }
+
+  const handleClearSuggestions = async () => {
+    try {
+      const result = await api.clearUserSuggestions()
+      if (result.cleared) {
+        toast.success('Suggestions cleared successfully')
+        setUniversities([])
+        setFilteredUniversities([])
+      } else {
+        toast.success('No suggestions to clear')
+      }
+    } catch (error) {
+      console.error('Error clearing suggestions:', error)
+      toast.error('Failed to clear suggestions')
+    }
   }
 
   const getMatchScoreColor = (score: number) => {
@@ -209,14 +264,21 @@ export default function UniversitiesPage() {
     if (!programs) return 'Not available'
     
     try {
-      const data = typeof programs === 'string' ? JSON.parse(programs) : programs
-      if (Array.isArray(data)) {
-        return `${data.length} programs available`
+      // Convert to array if it's a string or object
+      let programsArray = programs
+      if (typeof programs === 'string') {
+        programsArray = JSON.parse(programs)
       }
+      
+      if (Array.isArray(programsArray)) {
+        return `${programsArray.length} programs available`
+      }
+      
+      return 'Not available'
     } catch (e) {
       // Ignore parsing errors
+      return 'Not available'
     }
-    return 'Not available'
   }
 
   if (isLoading) {
@@ -246,14 +308,52 @@ export default function UniversitiesPage() {
                 Back to Home
               </Link>
               <div className="flex items-center space-x-2">
-                <GraduationCap className="h-6 w-6 text-primary" />
-                <span className="text-lg font-bold">Your University Matches</span>
+                <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+                  <GraduationCap className="h-6 w-6 text-primary" />
+                  <span className="text-lg font-bold gradient-text">UniFinder</span>
+                </Link>
               </div>
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="secondary" className="bg-green-100 text-green-800">
                 {filteredUniversities.length} Matches Found
               </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+              >
+                <Link href="/browse">
+                  Browse All Universities
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRegenerateSuggestions}
+                disabled={isRegenerating}
+              >
+                {isRegenerating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Regenerate
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearSuggestions}
+                className="text-red-600 hover:text-red-700"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Clear
+              </Button>
             </div>
           </div>
         </div>

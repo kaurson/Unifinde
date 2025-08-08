@@ -58,7 +58,7 @@ export default function UniversityDetailPage() {
     const loadUniversity = async () => {
       if (!universityId) {
         toast.error('Invalid university ID')
-        router.push('/universities')
+        router.push('/browse')
         return
       }
 
@@ -70,7 +70,7 @@ export default function UniversityDetailPage() {
       } catch (error) {
         console.error('Error loading university:', error)
         toast.error('Failed to load university details')
-        router.push('/universities')
+        router.push('/browse')
       } finally {
         setIsLoading(false)
       }
@@ -126,7 +126,7 @@ export default function UniversityDetailPage() {
             The university you're looking for doesn't exist or has been removed.
           </p>
           <Button asChild>
-            <Link href="/universities">
+            <Link href="/browse">
               Back to Universities
             </Link>
           </Button>
@@ -143,15 +143,17 @@ export default function UniversityDetailPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Link 
-                href="/universities" 
+                href="/browse" 
                 className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Universities
               </Link>
               <div className="flex items-center space-x-2">
-                <GraduationCap className="h-6 w-6 text-primary" />
-                <span className="text-lg font-bold">{university.name}</span>
+                <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+                  <GraduationCap className="h-6 w-6 text-primary" />
+                  <span className="text-lg font-bold gradient-text">UniFinder</span>
+                </Link>
               </div>
             </div>
             <div className="flex items-center space-x-2">
