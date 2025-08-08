@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { 
-  ArrowLeft, 
   User, 
   Mail, 
   Phone, 
@@ -24,6 +23,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { api, User as UserType } from '@/lib/api'
+import AppLayout from '@/components/layout/AppLayout'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -119,23 +119,16 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
+    <AppLayout>
+      <div className="container mx-auto px-4 py-8">
+        {/* Page Header */}
+        <div className="mb-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link 
-                href="/" 
-                className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Home
-              </Link>
-              <div className="flex items-center space-x-2">
-                <User className="h-6 w-6 text-primary" />
-                <span className="text-lg font-bold">Your Profile</span>
-              </div>
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Your Profile</h1>
+              <p className="text-muted-foreground">
+                Manage your personal information and preferences
+              </p>
             </div>
             <div className="flex items-center space-x-2">
               {!isEditing ? (
@@ -158,9 +151,7 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
-      </header>
 
-      <div className="container mx-auto px-4 py-8">
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Profile Info */}
           <div className="lg:col-span-2 space-y-6">
@@ -390,6 +381,6 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
-    </div>
+    </AppLayout>
   )
 } 

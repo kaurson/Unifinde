@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { 
-  ArrowLeft, 
   Search, 
   MapPin, 
   GraduationCap, 
@@ -24,6 +23,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { api, University } from '@/lib/api'
+import AppLayout from '@/components/layout/AppLayout'
 
 export default function UniversitiesPage() {
   const router = useRouter()
@@ -358,25 +358,16 @@ export default function UniversitiesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link 
-                href="/" 
-                className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Home
-              </Link>
-              <div className="flex items-center space-x-2">
-                <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-                  <GraduationCap className="h-6 w-6 text-primary" />
-                  <span className="text-lg font-bold gradient-text">UniFinder</span>
-                </Link>
-              </div>
+    <AppLayout>
+      <div className="container mx-auto px-4 py-8">
+        {/* Page Header with Actions */}
+        <div className="mb-8">
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Your University Matches</h1>
+              <p className="text-muted-foreground">
+                Discover universities that match your profile and preferences
+              </p>
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="secondary" className="bg-green-100 text-green-800">
@@ -421,9 +412,7 @@ export default function UniversitiesPage() {
             </div>
           </div>
         </div>
-      </header>
 
-      <div className="container mx-auto px-4 py-8">
         {/* Search and Filter Section */}
         <div className="mb-8">
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -448,224 +437,224 @@ export default function UniversitiesPage() {
           </div>
         </div>
 
-        {/* Suggestion Stats Section */}
-        {suggestionStats && (
+          {/* Suggestion Stats Section */}
+          {suggestionStats && (
+            <div className="mb-6">
+              <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {suggestionStats.total_suggestions || universities.length}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Total Matches</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {suggestionStats.average_score ? `${(suggestionStats.average_score * 100).toFixed(1)}%` : 'N/A'}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Avg. Match Score</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {suggestionStats.highest_score ? `${(suggestionStats.highest_score * 100).toFixed(1)}%` : 'N/A'}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Best Match</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {suggestionStats.last_updated ? new Date(suggestionStats.last_updated).toLocaleDateString() : 'N/A'}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Last Updated</div>
+                    </div>
+                  </div>
+                  {suggestionStats.matching_methods && Object.keys(suggestionStats.matching_methods).length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-blue-200">
+                      <div className="text-sm text-muted-foreground mb-2">Matching Methods Used:</div>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(suggestionStats.matching_methods).map(([method, count]) => (
+                          <Badge key={method} variant="outline" className="text-xs">
+                            {method}: {String(count)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Results Summary */}
           <div className="mb-6">
-            <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
-              <CardContent className="pt-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {suggestionStats.total_suggestions || universities.length}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Total Matches</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">
-                      {suggestionStats.average_score ? `${(suggestionStats.average_score * 100).toFixed(1)}%` : 'N/A'}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Avg. Match Score</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-600">
-                      {suggestionStats.highest_score ? `${(suggestionStats.highest_score * 100).toFixed(1)}%` : 'N/A'}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Best Match</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-orange-600">
-                      {suggestionStats.last_updated ? new Date(suggestionStats.last_updated).toLocaleDateString() : 'N/A'}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Last Updated</div>
-                  </div>
-                </div>
-                {suggestionStats.matching_methods && Object.keys(suggestionStats.matching_methods).length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-blue-200">
-                    <div className="text-sm text-muted-foreground mb-2">Matching Methods Used:</div>
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(suggestionStats.matching_methods).map(([method, count]) => (
-                        <Badge key={method} variant="outline" className="text-xs">
-                          {method}: {String(count)}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <h2 className="text-2xl font-bold mb-2">Your Personalized Matches</h2>
+            <p className="text-muted-foreground">
+              Based on your questionnaire responses, here are the universities that best match your profile.
+            </p>
           </div>
-        )}
 
-        {/* Results Summary */}
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold mb-2">Your Personalized Matches</h2>
-          <p className="text-muted-foreground">
-            Based on your questionnaire responses, here are the universities that best match your profile.
-          </p>
-        </div>
-
-        {/* Universities Grid */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredUniversities.map((university) => (
-            <Card 
-              key={university.id} 
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => handleUniversityClick(university.id)}
-            >
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg mb-2">{university.name}</CardTitle>
-                    <div className="flex items-center text-sm text-muted-foreground mb-2">
-                      <MapPin className="h-4 w-4 mr-1" />
-                      {formatLocation(university)}
-                    </div>
-                    <div className="flex items-center space-x-2 mb-2">
-                      {university.world_ranking && (
-                        <Badge variant="outline" className="text-xs">
-                          #{university.world_ranking} World
-                        </Badge>
-                      )}
-                      {university.national_ranking && (
-                        <Badge variant="outline" className="text-xs">
-                          #{university.national_ranking} National
-                        </Badge>
-                      )}
-                      {university.regional_ranking && (
-                        <Badge variant="outline" className="text-xs">
-                          #{university.regional_ranking} Regional
+          {/* Universities Grid */}
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {filteredUniversities.map((university) => (
+              <Card 
+                key={university.id} 
+                className="hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => handleUniversityClick(university.id)}
+              >
+                <CardHeader className="pb-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg mb-2">{university.name}</CardTitle>
+                      <div className="flex items-center text-sm text-muted-foreground mb-2">
+                        <MapPin className="h-4 w-4 mr-1" />
+                        {formatLocation(university)}
+                      </div>
+                      <div className="flex items-center space-x-2 mb-2">
+                        {university.world_ranking && (
+                          <Badge variant="outline" className="text-xs">
+                            #{university.world_ranking} World
+                          </Badge>
+                        )}
+                        {university.national_ranking && (
+                          <Badge variant="outline" className="text-xs">
+                            #{university.national_ranking} National
+                          </Badge>
+                        )}
+                        {university.regional_ranking && (
+                          <Badge variant="outline" className="text-xs">
+                            #{university.regional_ranking} Regional
+                          </Badge>
+                        )}
+                      </div>
+                      {university.type && (
+                        <Badge variant="secondary" className="text-xs">
+                          {university.type}
                         </Badge>
                       )}
                     </div>
-                    {university.type && (
-                      <Badge variant="secondary" className="text-xs">
-                        {university.type}
-                      </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleFavorite(university.id)
+                      }}
+                      className={`p-1 h-8 w-8 ${
+                        favorites.includes(university.id) ? 'text-red-500' : 'text-muted-foreground'
+                      }`}
+                    >
+                      <Heart className={`h-4 w-4 ${
+                        favorites.includes(university.id) ? 'fill-current' : ''
+                      }`} />
+                    </Button>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {university.description || 'No description available'}
+                  </p>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Acceptance Rate:</span>
+                      <span className="font-medium">{formatAcceptanceRate(university.acceptance_rate)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Tuition:</span>
+                      <span className="font-medium">{formatTuition(university)}</span>
+                    </div>
+                    {university.student_population && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Students:</span>
+                        <span className="font-medium">{university.student_population.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {university.student_faculty_ratio && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Student-Faculty Ratio:</span>
+                        <span className="font-medium">{university.student_faculty_ratio}:1</span>
+                      </div>
+                    )}
+                    {university.international_students_percentage && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">International Students:</span>
+                        <span className="font-medium">{university.international_students_percentage}%</span>
+                      </div>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleFavorite(university.id)
-                    }}
-                    className={`p-1 h-8 w-8 ${
-                      favorites.includes(university.id) ? 'text-red-500' : 'text-muted-foreground'
-                    }`}
-                  >
-                    <Heart className={`h-4 w-4 ${
-                      favorites.includes(university.id) ? 'fill-current' : ''
-                    }`} />
-                  </Button>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {university.description || 'No description available'}
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Programs:</span>
+                      <span className="font-medium">{formatPrograms(university.programs)}</span>
+                    </div>
+                    {formatStudentLife(university.student_life) && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Student Life:</span>
+                        <span className="font-medium">{formatStudentLife(university.student_life)}</span>
+                      </div>
+                    )}
+                    {university.campus_size && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Campus:</span>
+                        <span className="font-medium">{university.campus_size}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex space-x-2 pt-2">
+                    <Button size="sm" className="flex-1">
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      View Details
+                    </Button>
+                    <Button size="sm" variant="outline">
+                      Compare
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* No Results */}
+          {filteredUniversities.length === 0 && (
+            <div className="text-center py-12">
+              <GraduationCap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">No universities found</h3>
+              <p className="text-muted-foreground mb-4">
+                Try adjusting your search terms or filters
+              </p>
+              <Button onClick={() => setSearchQuery('')}>
+                Clear Search
+              </Button>
+            </div>
+          )}
+
+          {/* Action Section */}
+          <div className="mt-12 text-center">
+            <Card className="gradient-bg text-white border-0">
+              <CardContent className="pt-8 pb-8">
+                <h3 className="text-xl font-bold mb-2">Need More Options?</h3>
+                <p className="text-white/90 mb-6">
+                  Complete additional questions to get more personalized recommendations
                 </p>
-                
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Acceptance Rate:</span>
-                    <span className="font-medium">{formatAcceptanceRate(university.acceptance_rate)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Tuition:</span>
-                    <span className="font-medium">{formatTuition(university)}</span>
-                  </div>
-                  {university.student_population && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Students:</span>
-                      <span className="font-medium">{university.student_population.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {university.student_faculty_ratio && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Student-Faculty Ratio:</span>
-                      <span className="font-medium">{university.student_faculty_ratio}:1</span>
-                    </div>
-                  )}
-                  {university.international_students_percentage && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">International Students:</span>
-                      <span className="font-medium">{university.international_students_percentage}%</span>
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Programs:</span>
-                    <span className="font-medium">{formatPrograms(university.programs)}</span>
-                  </div>
-                  {formatStudentLife(university.student_life) && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Student Life:</span>
-                      <span className="font-medium">{formatStudentLife(university.student_life)}</span>
-                    </div>
-                  )}
-                  {university.campus_size && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Campus:</span>
-                      <span className="font-medium">{university.campus_size}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex space-x-2 pt-2">
-                  <Button size="sm" className="flex-1">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    View Details
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Button variant="secondary" asChild>
+                    <Link href="/questionnaire">
+                      Retake Questionnaire
+                    </Link>
                   </Button>
-                  <Button size="sm" variant="outline">
-                    Compare
+                  <Button variant="outline" className="border-white text-white hover:bg-white hover:text-primary">
+                    Contact Advisor
                   </Button>
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
-
-        {/* No Results */}
-        {filteredUniversities.length === 0 && (
-          <div className="text-center py-12">
-            <GraduationCap className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">No universities found</h3>
-            <p className="text-muted-foreground mb-4">
-              Try adjusting your search terms or filters
-            </p>
-            <Button onClick={() => setSearchQuery('')}>
-              Clear Search
-            </Button>
           </div>
-        )}
-
-        {/* Action Section */}
-        <div className="mt-12 text-center">
-          <Card className="gradient-bg text-white border-0">
-            <CardContent className="pt-8 pb-8">
-              <h3 className="text-xl font-bold mb-2">Need More Options?</h3>
-              <p className="text-white/90 mb-6">
-                Complete additional questions to get more personalized recommendations
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button variant="secondary" asChild>
-                  <Link href="/questionnaire">
-                    Retake Questionnaire
-                  </Link>
-                </Button>
-                <Button variant="outline" className="border-white text-white hover:bg-white hover:text-primary">
-                  Contact Advisor
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </div>
-      </div>
-    </div>
-  )
-} 
+      </AppLayout>
+    )
+  } 

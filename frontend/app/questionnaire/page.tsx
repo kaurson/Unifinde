@@ -109,22 +109,31 @@ export default function QuestionnairePage() {
 
       console.log('Submitting data:', submissionData)
 
-      const result = await api.submitQuestionnaire(submissionData)
-      console.log('Questionnaire submission result:', result)
+      // Get user profile first for the redirect
+      const userProfile = await api.getProfile()
+      console.log('User profile:', userProfile)
       
-      const userProfile = await api.getProfile() // Get current user profile to get the ID
-      console.log('User profile after submission:', userProfile)
+      // Immediately redirect to loading page
+      toast.success('Questionnaire completed! Processing your results...')
+      router.push(`/loading?userId=${userProfile.id}&redirectTo=/summary`)
       
-      toast.success('Questionnaire completed! Redirecting to your summary...')
-      router.push(`/summary/${userProfile.id}`) // Redirect to summary page
+      // Submit questionnaire in the background (don't await)
+      api.submitQuestionnaire(submissionData)
+        .then(result => {
+          console.log('Questionnaire submission result:', result)
+        })
+        .catch(error => {
+          console.error('Error submitting questionnaire:', error)
+          // Note: We don't show error toast here since user is already on loading page
+        })
+        
     } catch (error) {
-      console.error('Error submitting questionnaire:', error)
+      console.error('Error in handleSubmit:', error)
       if (error instanceof Error) {
         toast.error(`Failed to submit questionnaire: ${error.message}`)
       } else {
         toast.error('Failed to submit questionnaire. Please try again.')
       }
-    } finally {
       setIsSubmitting(false)
     }
   }
@@ -144,35 +153,41 @@ export default function QuestionnairePage() {
             randomAnswer = Math.random() > 0.5 ? true : false
             break
           case 'integer':
-            randomAnswer = Math.floor(Math.random() * 10)
+            randomAnswer = Math.floor(Math.random() * 10) + 1
             break
           case 'float':
-            randomAnswer = parseFloat((Math.random() * 10).toFixed(2))
+            randomAnswer = parseFloat((Math.random() * 10 + 1).toFixed(2))
             break
           case 'scale_0_10':
             randomAnswer = Math.floor(Math.random() * 11)
             break
           case 'multiple_choice_3':
-            randomAnswer = ['Option A', 'Option B', 'Option C'][Math.floor(Math.random() * 3)]
+            const options3 = ['Strongly Agree', 'Neutral', 'Strongly Disagree']
+            randomAnswer = options3[Math.floor(Math.random() * 3)]
             break
           case 'multiple_choice_5':
-            randomAnswer = ['Option A', 'Option B', 'Option C', 'Option D', 'Option E'][Math.floor(Math.random() * 5)]
+            const options5 = ['Very Important', 'Important', 'Neutral', 'Not Important', 'Not at All Important']
+            randomAnswer = options5[Math.floor(Math.random() * 5)]
             break
           case 'text':
             const textOptions = [
-              'I enjoy learning new things',
-              'I prefer working in teams',
-              'I like to solve complex problems',
-              'I am very organized',
-              'I enjoy creative activities',
-              'I prefer structured environments',
-              'I like to take leadership roles',
-              'I enjoy research and analysis'
+              'I enjoy learning new things and exploring different subjects. I prefer hands-on learning experiences and working in collaborative environments.',
+              'I am very organized and detail-oriented. I like to plan ahead and prefer structured learning environments with clear expectations.',
+              'I enjoy creative problem-solving and thinking outside the box. I prefer flexible learning environments that allow for innovation.',
+              'I am a natural leader and enjoy taking initiative. I prefer group projects and opportunities to guide others.',
+              'I am analytical and enjoy research-based learning. I prefer quiet environments where I can focus deeply on complex topics.',
+              'I am very social and enjoy working with others. I prefer interactive learning experiences and group discussions.',
+              'I am independent and prefer self-directed learning. I like to work at my own pace and explore topics that interest me.',
+              'I am practical and prefer learning that has real-world applications. I enjoy internships and hands-on experiences.',
+              'I am curious and enjoy exploring diverse subjects. I prefer interdisciplinary approaches and connecting different fields.',
+              'I am goal-oriented and prefer learning that helps me achieve my career objectives. I enjoy structured programs with clear outcomes.',
+              'I am adaptable and enjoy learning in different environments. I prefer programs that offer flexibility and variety.',
+              'I am passionate about making a difference. I prefer learning that helps me contribute to society and solve real problems.'
             ]
             randomAnswer = textOptions[Math.floor(Math.random() * textOptions.length)]
             break
           default:
-            randomAnswer = 'Random answer for testing purposes'
+            randomAnswer = 'I am interested in learning and growing academically. I prefer environments that challenge me and help me develop my skills.'
         }
         
         randomAnswers[question.id] = randomAnswer

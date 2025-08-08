@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { 
-  ArrowLeft, 
   Search, 
   MapPin, 
   GraduationCap, 
@@ -25,6 +24,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { api, University } from '@/lib/api'
+import AppLayout from '@/components/layout/AppLayout'
 
 export default function BrowseUniversitiesPage() {
   const router = useRouter()
@@ -303,25 +303,16 @@ export default function BrowseUniversitiesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
+    <AppLayout>
+      <div className="container mx-auto px-4 py-8">
+        {/* Page Header */}
+        <div className="mb-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link 
-                href="/" 
-                className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Home
-              </Link>
-              <div className="flex items-center space-x-2">
-                <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-                  <Globe className="h-6 w-6 text-primary" />
-                  <span className="text-lg font-bold gradient-text">UniFinder</span>
-                </Link>
-              </div>
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Browse Universities</h1>
+              <p className="text-muted-foreground">
+                Explore universities from around the world
+              </p>
             </div>
             <div className="flex items-center space-x-2">
               <Badge variant="secondary" className="bg-blue-100 text-blue-800">
@@ -330,14 +321,12 @@ export default function BrowseUniversitiesPage() {
             </div>
           </div>
         </div>
-      </header>
 
-      <div className="container mx-auto px-4 py-8">
         {/* Search and Filter Section */}
         <div className="mb-8">
           {/* Filter Controls Header */}
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold">Browse Universities</h2>
+            <h2 className="text-2xl font-bold">Search & Filter</h2>
             <div className="flex items-center space-x-2">
               {getActiveFiltersCount() > 0 && (
                 <Button variant="outline" size="sm" onClick={clearFilters}>
@@ -726,6 +715,6 @@ export default function BrowseUniversitiesPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </AppLayout>
   )
 } 

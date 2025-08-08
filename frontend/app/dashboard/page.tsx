@@ -8,6 +8,7 @@ import { GraduationCap, User, LogOut, Settings, BookOpen, Target, Users } from '
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import AppLayout from '@/components/layout/AppLayout'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -47,29 +48,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-              <GraduationCap className="h-8 w-8 text-primary" />
-              <span className="text-xl font-bold gradient-text">UniFinder</span>
-            </Link>
-          </div>
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-muted-foreground">
-              Welcome, {user?.name || 'User'}
-            </span>
-            <Button onClick={handleLogout} variant="outline" size="sm">
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
+    <AppLayout>
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
           {/* Welcome Section */}
@@ -168,6 +147,6 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
-    </div>
+    </AppLayout>
   )
 } 
